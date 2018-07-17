@@ -7,6 +7,7 @@ RUN apk add --update --no-cache --virtual=run-deps \
 ENV SLACK_WEBHOOK_URL example_value
 ENV SLEEP_SECONDS 60
 ENV ENDPOINT_DEFINITIONS_FILE /opt/app/config/endpoints.json
+ENV ALERT_DEFINITIONS_FILE /opt/app/config/alerts.json
 
 WORKDIR /opt/app
 CMD ["/opt/app/run.sh"]

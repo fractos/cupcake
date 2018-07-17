@@ -6,6 +6,7 @@ import socket
 import http.client
 import json
 import time
+import requests
 import settings
 
 def main():
@@ -21,11 +22,15 @@ def lifecycle():
         open(settings.ENDPOINT_DEFINITIONS_FILE).read()
     )
 
+    alert_definitions = json.loads(
+        open(settings.ALERT_DEFINITIONS_FILE).read()
+    )
+
     # collect endpoint results
-    endpoints_check(endpoint_definitions)
+    endpoints_check(endpoint_definitions, alert_definitions)
 
 
-def endpoints_check(endpoints):
+def endpoints_check(endpoints, alerts):
     logger.info('collecting endpoint health')
 
     for group in endpoints['groups']:
@@ -54,7 +59,8 @@ def endpoints_check(endpoints):
                             key=endpoint_name,
                             result=test_endpoint(url=endpoint_url, expected=endpoint_expected),
                             url=endpoint_url,
-                            expected=endpoint_expected
+                            expected=endpoint_expected,
+                            alerts=alerts
                         )
 
 
@@ -112,12 +118,40 @@ def test_endpoint(url, expected):
         }
 
 
-def handle_result(environment, namespace, key, result, expected, url="none"):
+def handle_result(environment, namespace, key, result, expected, alerts, url="none"):
     timestamp = datetime.now(timezone.utc).astimezone().isoformat()
     logger.info('result: timestamp: %s, environment: %s, namespace: %s, key: %s, result: %s, url: %s, expected: %s'
         % (timestamp, environment, namespace, key, result['result'], url, expected))
     if 'actual' in result:
         logger.info('actual: %s' % result['actual'])
+
+    message = '%s %s %s %s' % (environment, namespace, key, result)
+
+    process_alerts(message, alerts)
+
+
+def process_alerts(message, alert_definitions):
+    logger.info('processing alerts')
+
+    for alert in alert_definitions['alerts']:
+
+        type = alert['@type']
+        if type == "alert-slack":
+            alert_slack(message, alert)
+        elif type == "alert-sns":
+            alert_sns(message, alert)
+
+
+def alert_slack(message, alert):
+    logger.info('alert_slack: %s' % message)
+    r = requests.post(alert['url'], json={"text": message, "link_names": 1})
+    pass
+
+
+def alert_sns(message, alert):
+    logger.info('alert_sns: %s' % message)
+    pass
+
 
 if __name__ == "__main__":
     main()
