@@ -17,6 +17,7 @@ def main():
 
     while True:
         lifecycle(db)
+        logger.info("sleeping for %s seconds..." % settings.SLEEP_SECONDS)
         time.sleep(settings.SLEEP_SECONDS)
 
 
@@ -106,7 +107,7 @@ def test_endpoint(url, expected):
 
         return {
             "result": False,
-            "message": "OK"
+            "message": "TIMEOUT"
         }
 
 
@@ -115,12 +116,21 @@ def test_endpoint(url, expected):
         try:
             s.settimeout(settings.CONNECTION_TIMEOUT)
             s.connect((parse_result.hostname, parse_result.port))
+        except socket.timeout as t:
+            logger.info(
+                "tcp endpoint %s hit timeout" % parse_result.netloc
+            )
+            return {
+                "result": False,
+                "message": "TIMEOUT"
+            }
         except Exception as e:
             logger.info(
                 "tcp endpoint %s had a problem: %s" % (parse_result.netloc, e)
             )
             return {
-                "result": False
+                "result": False,
+                "message": "BAD"
             }
         finally:
             s.close()
@@ -176,6 +186,8 @@ def handle_result(environment_group, environment, endpoint_group, endpoint, resu
             if 'actual' in result:
                 presentation_message = presentation_message + ", actual: %s" % result["actual"]
                 message = message + ", actual: %s" % result["actual"]
+            else:
+                message = message + ", actual: %s" % result["message"]
 
             db.save_active(environment_group, environment, endpoint_group, endpoint, timestamp, presentation_message)
 
