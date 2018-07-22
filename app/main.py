@@ -1,23 +1,26 @@
 from logzero import logger
 from urllib.parse import urlparse
 from datetime import datetime, timezone
+from dateutil.relativedelta import relativedelta
 import re
 import socket
 import http.client
 import json
 import time
 import requests
+import sqlite3
 import settings
 
 def main():
+    db = settings.get_database()
     logger.info("starting...")
 
     while True:
-        lifecycle()
+        lifecycle(db)
         time.sleep(settings.SLEEP_SECONDS)
 
 
-def lifecycle():
+def lifecycle(db):
     endpoint_definitions = json.loads(
         open(settings.ENDPOINT_DEFINITIONS_FILE).read()
     )
@@ -26,14 +29,14 @@ def lifecycle():
         open(settings.ALERT_DEFINITIONS_FILE).read()
     )
 
-    # collect endpoint results
-    endpoints_check(endpoint_definitions, alert_definitions)
+    endpoints_check(endpoint_definitions, alert_definitions, db)
 
 
-def endpoints_check(endpoints, alerts):
+def endpoints_check(endpoints, alerts, db):
     logger.info('collecting endpoint health')
 
     for group in endpoints['groups']:
+        environment_group_id = group['id']
 
         for environment in group['environments']:
             environment_id = environment['id']
@@ -54,13 +57,15 @@ def endpoints_check(endpoints, alerts):
                         # test the endpoint here
 
                         handle_result(
+                            environment_group=environment_group_id,
                             environment=environment_id,
-                            namespace=endpoint_group_name,
-                            key=endpoint_name,
+                            endpoint_group=endpoint_group_name,
+                            endpoint=endpoint_name,
                             result=test_endpoint(url=endpoint_url, expected=endpoint_expected),
                             url=endpoint_url,
                             expected=endpoint_expected,
-                            alerts=alerts
+                            alerts=alerts,
+                            db=db
                         )
 
 
@@ -73,36 +78,42 @@ def test_endpoint(url, expected):
             conn = None
 
             if parse_result.scheme == 'http':
-                logger.debug('starting http connection')
-                conn = http.client.HTTPConnection(parse_result.netloc)
+                conn = http.client.HTTPConnection(
+                    host=parse_result.netloc,
+                    timeout=settings.CONNECTION_TIMEOUT)
             else:
-                logger.debug('starting https connection')
-                conn = http.client.HTTPSConnection(parse_result.netloc)
+                conn = http.client.HTTPSConnection(
+                    host=parse_result.netloc,
+                    timeout=settings.CONNECTION_TIMEOUT)
 
             conn.request('GET', parse_result.path)
             status = str(conn.getresponse().status)
             logger.debug('status: %s, expected: %s' % (status, expected))
             if re.match(expected, status):
                 return {
-                    "result": True
+                    "result": True,
+                    "message": "OK"
                 }
             else:
                 return {
                     "result": False,
-                    "actual": status
+                    "actual": status,
+                    "message": "BAD"
                 }
 
         except Exception:
             pass
 
         return {
-            "result": False
+            "result": False,
+            "message": "OK"
         }
 
 
     elif parse_result.scheme == 'tcp':
         s = socket.socket()
         try:
+            s.settimeout(settings.CONNECTION_TIMEOUT)
             s.connect((parse_result.hostname, parse_result.port))
         except Exception as e:
             logger.info(
@@ -118,16 +129,57 @@ def test_endpoint(url, expected):
         }
 
 
-def handle_result(environment, namespace, key, result, expected, alerts, url="none"):
+def handle_result(environment_group, environment, endpoint_group, endpoint, result, expected, alerts, db, url="none"):
     timestamp = datetime.now(timezone.utc).astimezone().isoformat()
-    logger.info('result: timestamp: %s, environment: %s, namespace: %s, key: %s, result: %s, url: %s, expected: %s'
-        % (timestamp, environment, namespace, key, result['result'], url, expected))
+    logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s'
+        % (timestamp, environment_group, environment, endpoint_group, endpoint, result['result'], url, expected))
     if 'actual' in result:
         logger.info('actual: %s' % result['actual'])
 
-    message = '%s %s %s %s' % (environment, namespace, key, result)
+    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds']
+    human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
+        for attr in attrs if getattr(delta, attr)]
 
-    process_alerts(message, alerts)
+    if db.active_exists(environment_group, environment, endpoint_group, endpoint):
+        # there's an existing alert for this tuple
+        active = db.get_active(environment_group, environment, endpoint_group, endpoint)
+        if result["result"]:
+            # existing alert cleared
+            logger.info("cleared alert")
+
+            delta = relativedelta(seconds=time.time()-active["timestamp"])
+            message = '%s %s %s %s now OK after %s' % \
+                (environment_group, environment, endpoint_group, endpoint,
+                    ", ".join(human_readable(delta)))
+
+            db.remove_active(environment_group, environment, endpoint_group, endpoint)
+
+            process_alerts(message, alerts)
+        else:
+            # existing alert continues
+            logger.info("alert continues")
+            pass
+
+    else:
+        # no existing alert for this tuple
+        if result["result"]:
+            # result was good
+            logger.info("no alert")
+            pass
+        else:
+            # result was bad
+            logger.info("new alert recorded")
+            timestamp = time.time()
+            presentation_message = "result was %s" % result["message"]
+            message = '%s %s %s %s expected %s' % (environment_group, environment, endpoint_group, endpoint, expected)
+
+            if 'actual' in result:
+                presentation_message = presentation_message + ", actual: %s" % result["actual"]
+                message = message + ", actual: %s" % result["actual"]
+
+            db.save_active(environment_group, environment, endpoint_group, endpoint, timestamp, presentation_message)
+
+            process_alerts(message, alerts)
 
 
 def process_alerts(message, alert_definitions):
