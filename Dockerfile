@@ -2,7 +2,8 @@ FROM alpine:3.6
 
 RUN apk add --update --no-cache --virtual=run-deps \
   python3 \
-  ca-certificates
+  ca-certificates \
+  py3-psycopg2
 
 ENV SLACK_WEBHOOK_URL example_value
 ENV SLEEP_SECONDS 60
