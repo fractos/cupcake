@@ -10,6 +10,7 @@ ENV SLEEP_SECONDS 60
 ENV ENDPOINT_DEFINITIONS_FILE /opt/app/config/endpoints.json
 ENV ALERT_DEFINITIONS_FILE /opt/app/config/alerts.json
 ENV DB_NAME cupcake.db
+ENV DB_TYPE sqlite
 ENV CONNECTION_TIMEOUT_SECONDS 10
 
 WORKDIR /opt/app

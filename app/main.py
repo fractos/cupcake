@@ -43,12 +43,12 @@ def endpoints_check(endpoints, alerts, db):
             environment_id = environment['id']
 
             for endpoint_group in environment['endpoint-groups']:
-                endpoint_group_name = endpoint_group['name']
+                endpoint_group_name = endpoint_group['id']
                 endpoint_group_enabled = endpoint_group['enabled']
 
                 if endpoint_group_enabled == "true":
                     for endpoint in endpoint_group['endpoints']:
-                        endpoint_name = endpoint['name']
+                        endpoint_name = endpoint['id']
                         endpoint_url = endpoint['url']
 
                         endpoint_expected = ''
@@ -208,8 +208,7 @@ def process_alerts(message, alert_definitions):
 
 def alert_slack(message, alert):
     logger.info('alert_slack: %s' % message)
-    r = requests.post(alert['url'], json={"text": message, "link_names": 1})
-    pass
+    _ = requests.post(alert['url'], json={"text": message, "link_names": 1})
 
 
 def alert_sns(message, alert):

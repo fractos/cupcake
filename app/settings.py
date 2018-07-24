@@ -8,9 +8,15 @@ SLEEP_SECONDS = int(os.getenv("SLEEP_SECONDS"))
 ENDPOINT_DEFINITIONS_FILE = os.getenv("ENDPOINT_DEFINITIONS_FILE")
 ALERT_DEFINITIONS_FILE = os.getenv("ALERT_DEFINITIONS_FILE")
 CONNECTION_TIMEOUT = int(os.getenv("CONNECTION_TIMEOUT_SECONDS"))
+DB_TYPE = os.getenv("DB_TYPE")
+
 
 def get_database():
-  return get_database_postgresql()
+  if DB_TYPE == "postgresql":
+    return get_database_postgresql()
+  else:
+    return get_database_sqlite()
+
 
 def get_database_postgresql():
   db = PostgreSqlDatabase()
