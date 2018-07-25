@@ -62,6 +62,58 @@ environment_group (e.g. "customer 1")
 
 This gives a great deal of flexibility and range for defining collections of endpoints.
 
+### Example
+
+The following defines an environment group called "customer ABC" which has an environment called "production". Within that environment are two endpoint groups - "external" and "internal". The "external" endpoint group contains an HTTPS URL for the main website including a regular expression that defines the HTTP status code that it expects to receive (any status code in range 2xx). The "internal" endpoint group contains a TCP URL for a Redis server. It is assumed for this example that Cupcake is situated on a server that is inside the private network and therefore is able to lookup a host named "redis.internal" using some kind of internal DNS scheme (e.g. Route53).
+
+```
+{
+  "@type": "endpoint-definitions",
+  "groups": [
+    {
+      "@type": "environment-group",
+      "id": "customer ABC",
+      "logo": "",
+      "environments": [
+        {
+          "@type": "environment",
+          "id": "production",
+          "endpoint-groups": [
+            {
+              "@type": "endpoint-group",
+              "id": "external",
+              "enabled": "true",
+              "logo": "",
+              "endpoints": [
+                {
+                  "@type": "endpoint",
+                  "id": "website",
+                  "url": "https://www.example.com/index.html",
+                  "expected": "^[2]\\d\\d$"
+                }
+              ]
+            },
+            {
+              "@type": "endpoint-group",
+              "id": "internal",
+              "logo": "",
+              "enabled": "true",
+              "endpoints": [
+                {
+                  "@type": "endpoint",
+                  "id": "redis",
+                  "url": "tcp://redis.internal:6379"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## Alert definition file
 
 Alerts are defined in the following way:
