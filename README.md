@@ -23,7 +23,7 @@ At the moment Cupcake is only able to emit alerts via a webhook URL such as the 
 
 Note:
 
-It is important to have CONNECTION_TIMEOUT_SECONDS set to a value less than 30, as when a process in a containerised environment such as ECS is redeployed or stopped then it will be given a SIGTERM signal and a 30 second timeout before a SIGKILL signal is sent that will kill the process immediately. Cupcake tests whether it has been requested to stop after each endpoint measurement.
+It is important to have CONNECTION_TIMEOUT_SECONDS set to a value less than 30, as when a process in a containerised environment such as ECS is redeployed or stopped then it will be given a SIGTERM signal and a 30 second timeout before a SIGKILL signal is sent that will kill the process immediately. Cupcake tests whether it has been requested to stop after each endpoint measurement and intercepts SIGTERM and SIGINT in order to try and quit as soon as possible after receiving them.
 
 ## sqlite
 
