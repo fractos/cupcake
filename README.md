@@ -21,6 +21,10 @@ At the moment Cupcake is only able to emit alerts via a webhook URL such as the 
 | CONNECTION_TIMEOUT_SECONDS | Number of seconds before HTTP(S) and TCP connections will timeout  | 10                             |
 | DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql` | sqlite                         |
 
+Note:
+
+It is important to have CONNECTION_TIMEOUT_SECONDS set to a value less than 30, as when a process in a containerised environment such as ECS is redeployed or stopped then it will be given a SIGTERM signal and a 30 second timeout before a SIGKILL signal is sent that will kill the process immediately. Cupcake tests whether it has been requested to stop after each endpoint measurement.
+
 ## sqlite
 
 To use sqlite as the backing database, set the following:

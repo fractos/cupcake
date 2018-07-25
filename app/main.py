@@ -9,16 +9,44 @@ import json
 import time
 import requests
 import sqlite3
+import signal
+import os
 import settings
 
+requested_to_quit = False
+
+
 def main():
-    db = settings.get_database()
     logger.info("starting...")
 
-    while True:
+    setup_signal_handling()
+
+    db = settings.get_database()
+
+    while lifecycle_continues():
         lifecycle(db)
-        logger.info("sleeping for %s seconds..." % settings.SLEEP_SECONDS)
-        time.sleep(settings.SLEEP_SECONDS)
+
+        if lifecycle_continues():
+            logger.info("sleeping for %s seconds..." % settings.SLEEP_SECONDS)
+            for x in range(settings.SLEEP_SECONDS):
+                if lifecycle_continues():
+                    time.sleep(1)
+
+
+def lifecycle_continues():
+    return not requested_to_quit
+
+
+def signal_handler(signum, frame):
+    logger.info("Caught signal %s" % signum)
+    global requested_to_quit
+    requested_to_quit = True
+
+
+def setup_signal_handling():
+    logger.info("setting up signal handling")
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
 
 
 def lifecycle(db):
@@ -55,23 +83,30 @@ def endpoints_check(endpoints, alerts, db):
                         if 'expected' in endpoint:
                             endpoint_expected = endpoint['expected']
 
-                        # test the endpoint here
+                        result = test_endpoint(url=endpoint_url, expected=endpoint_expected)
 
                         handle_result(
                             environment_group=environment_group_id,
                             environment=environment_id,
                             endpoint_group=endpoint_group_name,
                             endpoint=endpoint_name,
-                            result=test_endpoint(url=endpoint_url, expected=endpoint_expected),
+                            result=result,
                             url=endpoint_url,
                             expected=endpoint_expected,
                             alerts=alerts,
                             db=db
                         )
 
+                        if not lifecycle_continues():
+                            return
+
 
 def test_endpoint(url, expected):
     logger.info('testing endpoint ' + url)
+    if not lifecycle_continues():
+        logger.info('test_endpoint: bailing')
+        return False
+
     parse_result = urlparse(url)
 
     if parse_result.scheme == 'http' or parse_result.scheme == 'https':
@@ -140,6 +175,10 @@ def test_endpoint(url, expected):
 
 
 def handle_result(environment_group, environment, endpoint_group, endpoint, result, expected, alerts, db, url="none"):
+    if not lifecycle_continues():
+        logger.info('handle_result: bailing')
+        return
+
     timestamp = datetime.now(timezone.utc).astimezone().isoformat()
     logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s'
         % (timestamp, environment_group, environment, endpoint_group, endpoint, result['result'], url, expected))
