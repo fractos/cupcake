@@ -1,5 +1,7 @@
 # Cupcake
 
+[![Build Status](https://travis-ci.org/fractos/cupcake.svg?branch=master)](https://travis-ci.org/fractos/cupcake)
+
 This is a very simple HTTP, HTTPS and TCP endpoint monitor intended to be the simplest thing that works.
 
 It will work through a file that defines groups of environments and endpoints, currently as a single thread.
