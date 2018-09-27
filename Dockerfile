@@ -19,5 +19,4 @@ CMD ["python3", "-u", "main.py"]
 COPY app/requirements.txt /opt/app/
 RUN pip3 install --no-cache-dir -r /opt/app/requirements.txt
 
-COPY config /opt/app/config/
 COPY app /opt/app/
