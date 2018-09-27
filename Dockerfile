@@ -6,7 +6,6 @@ RUN apk add --update --no-cache --virtual=run-deps \
   py3-psycopg2 \
   vim
 
-ENV SLACK_WEBHOOK_URL example_value
 ENV SLEEP_SECONDS 60
 ENV ENDPOINT_DEFINITIONS_FILE /opt/app/config/endpoints.json
 ENV ALERT_DEFINITIONS_FILE /opt/app/config/alerts.json

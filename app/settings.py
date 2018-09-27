@@ -3,7 +3,6 @@ import database
 from database.sqlite_database import SqliteDatabase
 from database.postgresql_database import PostgreSqlDatabase
 
-SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 SLEEP_SECONDS = int(os.getenv("SLEEP_SECONDS"))
 ENDPOINT_DEFINITIONS_FILE = os.getenv("ENDPOINT_DEFINITIONS_FILE")
 ALERT_DEFINITIONS_FILE = os.getenv("ALERT_DEFINITIONS_FILE")

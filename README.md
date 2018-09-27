@@ -16,7 +16,6 @@ At the moment Cupcake is only able to emit alerts via a webhook URL such as the 
 
 | Name                       | Description                                                        | Default                        |
 |----------------------------|--------------------------------------------------------------------|--------------------------------|
-| SLACK_WEBHOOK_URL          | URL of Slack webhook                                               |                                |
 | SLEEP_SECONDS              | Number of seconds to yield between runs                            | 60                             |
 | ENDPOINT_DEFINITIONS_FILE  | Full path of endpoint definitions file                             | /opt/app/config/endpoints.json |
 | ALERT_DEFINITIONS_FILE     | Full path of alert definitions file                                | /opt/app/config/alerts.json    |
