@@ -11,6 +11,7 @@ import requests
 import sqlite3
 import signal
 import os
+import boto3
 import settings
 
 requested_to_quit = False
@@ -252,7 +253,19 @@ def alert_slack(message, alert):
 
 def alert_sns(message, alert):
     logger.info('alert_sns: %s' % message)
-    pass
+
+    sns_client = boto3.client('sns', alert['region'])
+
+    sns_message = {
+        'timestamp': time.time(),
+        'message': message
+    }
+
+    _ = sns_client.publish(
+        TopicArn=alert['arn'],
+        Message=json.dumps(sns_message)
+    )
+
 
 
 if __name__ == "__main__":
