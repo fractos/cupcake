@@ -18,16 +18,15 @@ class Incident:
         self.presentation_message = presentation_message
 
     def as_dict(self):
-        return
-            {
-                "timestamp": self.timestamp,
-                "environment_group": self.environment_group,
-                "environment": self.environment,
-                "endpoint_group": self.endpoint_group,
-                "endpoint": self.endpoint,
-                "result": self.result,
-                "url": self.url,
-                "expected": self.expected,
-                "message": self.message,
-                "presentation_message": self.presentation_message
-            }
+        return {
+            "timestamp": self.timestamp,
+            "environment_group": self.environment_group,
+            "environment": self.environment,
+            "endpoint_group": self.endpoint_group,
+            "endpoint": self.endpoint,
+            "result": self.result,
+            "url": self.url,
+            "expected": self.expected,
+            "message": self.message,
+            "presentation_message": self.presentation_message
+        }
