@@ -133,7 +133,8 @@ Alerts are defined in the following way:
     },
     {
       "@type": "alert-sns",
-      "arn": "xxx"
+      "arn": "xxx",
+      "region": "yyy"
     }
   ]
 }
