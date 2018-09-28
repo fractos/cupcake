@@ -16,7 +16,7 @@ ENV CONNECTION_TIMEOUT_SECONDS 10
 WORKDIR /opt/app
 CMD ["python3", "-u", "main.py"]
 
-COPY app/requirements.txt /opt/app/
+COPY requirements.txt /opt/app/
 RUN pip3 install --no-cache-dir -r /opt/app/requirements.txt
 
 COPY app /opt/app/

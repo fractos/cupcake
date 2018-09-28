@@ -47,7 +47,7 @@ class SqliteDatabase(Database):
       if con:
         con.close()
 
-  def get_active(self, environment_group, environment, endpoint_group, endpoint):
+  def get_active(self, incident):
     logger.debug("sqlite_database: get_active()")
     con = None
     try:
@@ -55,7 +55,7 @@ class SqliteDatabase(Database):
       con.row_factory = sqlite3.Row
       cur = con.cursor()
       cur.execute('''SELECT * FROM active WHERE environment_group = ? AND environment = ? AND endpoint_group = ? AND endpoint = ?''',
-        (environment_group, environment, endpoint_group, endpoint))
+        (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint))
       data = cur.fetchone()
       return data
     except sqlite3.Error as e:
@@ -81,14 +81,14 @@ class SqliteDatabase(Database):
       if con:
         con.close()
 
-  def active_exists(self, environment_group, environment, endpoint_group, endpoint):
+  def active_exists(self, incident):
     logger.debug("sqlite_database: active_exists()")
     con = None
     try:
       con = sqlite3.connect(self.db_name)
       cur = con.cursor()
       cur.execute('''SELECT COUNT(*) FROM active WHERE environment_group = ? AND environment = ? AND endpoint_group = ? AND endpoint = ?''',
-        (environment_group, environment, endpoint_group, endpoint))
+        (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint))
       data = cur.fetchone()
       return int(data[0]) > 0
     except sqlite3.Error as e:
@@ -97,14 +97,14 @@ class SqliteDatabase(Database):
       if con:
         con.close()
 
-  def save_active(self, environment_group, environment, endpoint_group, endpoint, timestamp, message):
+  def save_active(self, incident):
     logger.debug("sqlite_database: save_active()")
     con = None
     try:
       con = sqlite3.connect(self.db_name)
       cur = con.cursor()
       cur.execute("INSERT INTO active VALUES (?,?,?,?,?,?)",
-        (environment_group, environment, endpoint_group, endpoint, timestamp, message))
+        (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.timestamp, incident.message))
       con.commit()
     except sqlite3.Error as e:
       logger.error("sqlite_database: problem during save_active() - %s" % str(e))
@@ -112,14 +112,14 @@ class SqliteDatabase(Database):
       if con:
         con.close()
 
-  def remove_active(self, environment_group, environment, endpoint_group, endpoint):
+  def remove_active(self, incident):
     logger.debug("sqlite_database: remove_active()")
     con = None
     try:
       con = sqlite3.connect(self.db_name)
       cur = con.cursor()
       cur.execute("DELETE FROM active WHERE environment_group = ? AND environment = ? AND endpoint_group = ? AND endpoint = ?",
-        (environment_group, environment, endpoint_group, endpoint))
+        (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint))
       con.commit()
     except sqlite3.Error as e:
       logger.error("sqlite_database: problem during remove_active() - %s" % str(e))

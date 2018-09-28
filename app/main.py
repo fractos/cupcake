@@ -11,6 +11,8 @@ import requests
 import sqlite3
 import signal
 import os
+import boto3
+from models import Incident
 import settings
 
 requested_to_quit = False
@@ -85,14 +87,19 @@ def endpoints_check(endpoints, alerts, db):
 
                         result = test_endpoint(url=endpoint_url, expected=endpoint_expected)
 
-                        handle_result(
+                        incident = Incident(
+                            timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
                             environment_group=environment_group_id,
                             environment=environment_id,
                             endpoint_group=endpoint_group_name,
                             endpoint=endpoint_name,
                             result=result,
                             url=endpoint_url,
-                            expected=endpoint_expected,
+                            expected=endpoint_expected
+                        )
+
+                        handle_result(
+                            incident,
                             alerts=alerts,
                             db=db
                         )
@@ -151,7 +158,7 @@ def test_endpoint(url, expected):
         try:
             s.settimeout(settings.CONNECTION_TIMEOUT)
             s.connect((parse_result.hostname, parse_result.port))
-        except socket.timeout as t:
+        except socket.timeout:
             logger.info(
                 "tcp endpoint %s hit timeout" % parse_result.netloc
             )
@@ -174,36 +181,34 @@ def test_endpoint(url, expected):
         }
 
 
-def handle_result(environment_group, environment, endpoint_group, endpoint, result, expected, alerts, db, url="none"):
+def handle_result(incident, alerts, db, url="none"):
     if not lifecycle_continues():
         logger.info('handle_result: bailing')
         return
-
-    timestamp = datetime.now(timezone.utc).astimezone().isoformat()
     logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s'
-        % (timestamp, environment_group, environment, endpoint_group, endpoint, result['result'], url, expected))
-    if 'actual' in result:
-        logger.info('actual: %s' % result['actual'])
+        % (incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result['result'], incident.url, incident.expected))
+    if 'actual' in incident.result:
+        logger.info('actual: %s' % incident.result['actual'])
 
     attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds']
     human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
         for attr in attrs if getattr(delta, attr)]
 
-    if db.active_exists(environment_group, environment, endpoint_group, endpoint):
+    if db.active_exists(incident):
         # there's an existing alert for this tuple
-        active = db.get_active(environment_group, environment, endpoint_group, endpoint)
-        if result["result"]:
+        active = db.get_active(incident)
+        if incident.result["result"]:
             # existing alert cleared
             logger.info("cleared alert")
 
             delta = relativedelta(seconds=time.time()-active["timestamp"])
-            message = '%s %s %s %s now OK after %s' % \
-                (environment_group, environment, endpoint_group, endpoint,
+            incident.message = '%s %s %s %s now OK after %s' % \
+                (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint,
                     ", ".join(human_readable(delta)))
 
-            db.remove_active(environment_group, environment, endpoint_group, endpoint)
+            db.remove_active(incident)
 
-            process_alerts(message, alerts)
+            process_alerts(incident, alerts)
         else:
             # existing alert continues
             logger.info("alert continues")
@@ -211,48 +216,54 @@ def handle_result(environment_group, environment, endpoint_group, endpoint, resu
 
     else:
         # no existing alert for this tuple
-        if result["result"]:
+        if incident.result["result"]:
             # result was good
             logger.info("no alert")
             pass
         else:
             # result was bad
             logger.info("new alert recorded")
-            timestamp = time.time()
-            presentation_message = "result was %s" % result["message"]
-            message = '%s %s %s %s expected %s' % (environment_group, environment, endpoint_group, endpoint, expected)
+            incident.timestamp = time.time()
+            incident.presentation_message = "result was %s" % incident.result["message"]
+            incident.message = '%s %s %s %s expected %s' % (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.expected)
 
-            if 'actual' in result:
-                presentation_message = presentation_message + ", actual: %s" % result["actual"]
-                message = message + ", actual: %s" % result["actual"]
+            if 'actual' in incident.result:
+                incident.presentation_message = incident.presentation_message + ", actual: %s" % incident.result["actual"]
+                incident.message = incident.message + ", actual: %s" % incident.result["actual"]
             else:
-                message = message + ", actual: %s" % result["message"]
+                incident.message = incident.message + ", actual: %s" % incident.result["message"]
 
-            db.save_active(environment_group, environment, endpoint_group, endpoint, timestamp, presentation_message)
+            db.save_active(incident)
 
-            process_alerts(message, alerts)
+            process_alerts(incident, alerts)
 
 
-def process_alerts(message, alert_definitions):
+def process_alerts(incident, alert_definitions):
     logger.info('processing alerts')
 
     for alert in alert_definitions['alerts']:
 
         type = alert['@type']
         if type == "alert-slack":
-            alert_slack(message, alert)
+            alert_slack(incident, alert)
         elif type == "alert-sns":
-            alert_sns(message, alert)
+            alert_sns(incident, alert)
 
 
-def alert_slack(message, alert):
-    logger.info('alert_slack: %s' % message)
-    _ = requests.post(alert['url'], json={"text": message, "link_names": 1})
+def alert_slack(incident, alert):
+    logger.info('alert_slack: %s' % incident.message)
+    _ = requests.post(alert['url'], json={"text": incident.message, "link_names": 1})
 
 
-def alert_sns(message, alert):
-    logger.info('alert_sns: %s' % message)
-    pass
+def alert_sns(incident, alert):
+    logger.info('alert_sns: %s' % incident.message)
+
+    sns_client = boto3.client('sns', alert['region'])
+
+    _ = sns_client.publish(
+        TopicArn=alert['arn'],
+        Message=json.dumps(incident.as_dict(), indent=4, sort_keys=True)
+    )
 
 
 if __name__ == "__main__":
