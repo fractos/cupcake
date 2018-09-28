@@ -262,7 +262,7 @@ def alert_sns(incident, alert):
 
     _ = sns_client.publish(
         TopicArn=alert['arn'],
-        Message=json.dumps(incident.as_dict())
+        Message=json.dumps(incident.as_dict(), indent=4, sort_keys=True)
     )
 
 
