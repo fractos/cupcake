@@ -14,13 +14,15 @@ At the moment Cupcake is only able to emit alerts via a webhook URL such as the 
 
 ## Environment variables
 
-| Name                       | Description                                                        | Default                        |
-|----------------------------|--------------------------------------------------------------------|--------------------------------|
-| SLEEP_SECONDS              | Number of seconds to yield between runs                            | 60                             |
-| ENDPOINT_DEFINITIONS_FILE  | Full path of endpoint definitions file                             | /opt/app/config/endpoints.json |
-| ALERT_DEFINITIONS_FILE     | Full path of alert definitions file                                | /opt/app/config/alerts.json    |
-| CONNECTION_TIMEOUT_SECONDS | Number of seconds before HTTP(S) and TCP connections will timeout  | 10                             |
-| DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql` | sqlite                         |
+| Name                       | Description                                                              | Default                        |
+|----------------------------|--------------------------------------------------------------------------|--------------------------------|
+| SLEEP_SECONDS              | Number of seconds to yield between runs                                  | 60                             |
+| ENDPOINT_DEFINITIONS_FILE  | Full path of endpoint definitions file                                   | /opt/app/config/endpoints.json |
+| ALERT_DEFINITIONS_FILE     | Full path of alert definitions file                                      | /opt/app/config/alerts.json    |
+| CONNECTION_TIMEOUT_SECONDS | Number of seconds before HTTP(S) and TCP connections will timeout        | 10                             |
+| DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql`       | sqlite                         |
+| EMIT_SUMMARY               | Whether to emit a summary / digest message to a subset of alert channels | True                           |
+| SUMMARY_SLEEP_SECONDS      | Number of seconds between emitting summary digests                       | 86400                          |
 
 Note:
 

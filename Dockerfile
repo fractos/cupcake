@@ -12,6 +12,8 @@ ENV ALERT_DEFINITIONS_FILE /opt/app/config/alerts.json
 ENV DB_NAME cupcake.db
 ENV DB_TYPE sqlite
 ENV CONNECTION_TIMEOUT_SECONDS 10
+ENV EMIT_SUMMARY True
+ENV SUMMARY_SLEEP_SECONDS 86400
 
 WORKDIR /opt/app
 CMD ["python3", "-u", "main.py"]

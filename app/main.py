@@ -8,7 +8,6 @@ import http.client
 import json
 import time
 import requests
-import sqlite3
 import signal
 import os
 import boto3
@@ -16,6 +15,7 @@ from models import Incident
 import settings
 
 requested_to_quit = False
+last_summary_emitted = time.time()
 
 
 def main():
@@ -30,7 +30,7 @@ def main():
 
         if lifecycle_continues():
             logger.info("sleeping for %s seconds..." % settings.SLEEP_SECONDS)
-            for x in range(settings.SLEEP_SECONDS):
+            for _ in range(settings.SLEEP_SECONDS):
                 if lifecycle_continues():
                     time.sleep(1)
 
@@ -60,7 +60,50 @@ def lifecycle(db):
         open(settings.ALERT_DEFINITIONS_FILE).read()
     )
 
+    if settings.EMIT_SUMMARY:
+        seconds=time.time()-last_summary_emitted
+        if seconds >= settings.SUMMARY_SLEEP_SECONDS:
+            last_summary_emitted = time.time()
+            emit_summary(endpoint_definitions, alert_definitions, db)
+
     endpoints_check(endpoint_definitions, alert_definitions, db)
+
+
+def emit_summary(endpoints, alerts, db):
+    """
+    Show a summary via a subset of notification types
+    """
+    logger.info('emit summary')
+
+    message = 'Cupcake is alive and currently monitoring %d endpoints' % len(endpoints)
+
+    actives = db.get_all_actives()
+    actives_message = ''
+
+    for active in actives:
+        actives_message = actives_message + active['message'] + '\n'
+
+    if len(actives) == 0:
+        message = message + '\n\n\nCupcake is not currently aware of any alerts'
+    else:
+        message = message + '\n\n\nCupcake is aware of the following alerts:\n%s' % actives_message
+
+    incident = Incident(
+        timestamp=time.time(),
+        environment_group='',
+        environment='',
+        endpoint_group='',
+        endpoint='',
+        result={},
+        url='',
+        expected='',
+        message=message
+    )
+
+    for alert in alerts['alerts']:
+        type = alert['@type']
+        if type == "alert-slack":
+            alert_slack(incident, alert)
 
 
 def endpoints_check(endpoints, alerts, db):
