@@ -77,7 +77,7 @@ def emit_summary(endpoints, alerts, db):
     """
     logger.info('emit summary')
 
-    message = 'Cupcake is alive and currently monitoring %d endpoints' % len(endpoints)
+    message = 'Cupcake is alive and currently monitoring %d endpoints.' % len(endpoints)
 
     actives = db.get_all_actives()
     actives_message = ''
@@ -86,7 +86,7 @@ def emit_summary(endpoints, alerts, db):
         actives_message = actives_message + active['message'] + '\n'
 
     if len(actives) == 0:
-        message = message + '\n\n\nCupcake is not currently aware of any alerts'
+        message = message + '\n\n\nCupcake is not currently aware of any alerts.'
     else:
         message = message + '\n\n\nCupcake is aware of the following alerts:\n%s' % actives_message
 
