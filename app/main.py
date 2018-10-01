@@ -15,7 +15,7 @@ from models import Incident
 import settings
 
 requested_to_quit = False
-last_summary_emitted = time.time()
+last_summary_emitted = 0
 
 
 def main():
