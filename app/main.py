@@ -62,7 +62,7 @@ def lifecycle(db):
         open(settings.ALERT_DEFINITIONS_FILE).read()
     )
 
-    if settings.EMIT_SUMMARY:
+    if settings.SUMMARY_ENABLED:
         seconds=time.time()-last_summary_emitted
         if seconds >= settings.SUMMARY_SLEEP_SECONDS:
             last_summary_emitted = time.time()
