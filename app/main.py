@@ -77,7 +77,16 @@ def emit_summary(endpoints, alerts, db):
     """
     logger.info('emit summary')
 
-    message = 'Cupcake is alive and currently monitoring %d endpoints.' % len(endpoints)
+    number_of_endpoints = 0
+
+    for group in endpoints['groups']:
+        for environment in group['environments']:
+            for endpoint_group in environment['endpoint-groups']:
+                if endpoint_group['enabled'] == "true":
+                    for _ in endpoint_group['endpoints']:
+                        number_of_endpoints = number_of_endpoints + 1
+
+    message = 'Cupcake is alive and currently monitoring %d endpoints.' % number_of_endpoints
 
     actives = db.get_all_actives()
     actives_message = ''
