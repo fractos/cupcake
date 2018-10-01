@@ -23,6 +23,7 @@ At the moment Cupcake is only able to emit alerts via a webhook URL such as the 
 | DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql`       | sqlite                         |
 | EMIT_SUMMARY               | Whether to emit a summary / digest message to a subset of alert channels | True                           |
 | SUMMARY_SLEEP_SECONDS      | Number of seconds between emitting summary digests                       | 86400                          |
+| SUMMARY_NOTIFICATION_LIST  | List of alert IDs to pass the summary information too                    | (empty)                        |
 
 Note:
 
@@ -131,10 +132,12 @@ Alerts are defined in the following way:
   "alerts": [
     {
       "@type": "alert-slack",
+      "id": "my-slack-channel",
       "url": "https://hooks.slack.com/services/xxx/yyy/zzz"
     },
     {
       "@type": "alert-sns",
+      "id": "my-aws-list",
       "arn": "xxx",
       "region": "yyy"
     }

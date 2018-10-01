@@ -52,6 +52,8 @@ def setup_signal_handling():
 
 
 def lifecycle(db):
+    global last_summary_emitted
+
     endpoint_definitions = json.loads(
         open(settings.ENDPOINT_DEFINITIONS_FILE).read()
     )
@@ -101,9 +103,9 @@ def emit_summary(endpoints, alerts, db):
     )
 
     for alert in alerts['alerts']:
-        type = alert['@type']
-        if type == "alert-slack":
-            alert_slack(incident, alert)
+        if alert['id'] in settings.SUMMARY_NOTIFICATION_LIST:
+            if alert['@type'] == "alert-slack":
+                alert_slack(incident, alert)
 
 
 def endpoints_check(endpoints, alerts, db):
