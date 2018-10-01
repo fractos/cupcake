@@ -14,13 +14,16 @@ At the moment Cupcake is only able to emit alerts via a webhook URL such as the 
 
 ## Environment variables
 
-| Name                       | Description                                                        | Default                        |
-|----------------------------|--------------------------------------------------------------------|--------------------------------|
-| SLEEP_SECONDS              | Number of seconds to yield between runs                            | 60                             |
-| ENDPOINT_DEFINITIONS_FILE  | Full path of endpoint definitions file                             | /opt/app/config/endpoints.json |
-| ALERT_DEFINITIONS_FILE     | Full path of alert definitions file                                | /opt/app/config/alerts.json    |
-| CONNECTION_TIMEOUT_SECONDS | Number of seconds before HTTP(S) and TCP connections will timeout  | 10                             |
-| DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql` | sqlite                         |
+| Name                       | Description                                                              | Default                        |
+|----------------------------|--------------------------------------------------------------------------|--------------------------------|
+| SLEEP_SECONDS              | Number of seconds to yield between runs                                  | 60                             |
+| ENDPOINT_DEFINITIONS_FILE  | Full path of endpoint definitions file                                   | /opt/app/config/endpoints.json |
+| ALERT_DEFINITIONS_FILE     | Full path of alert definitions file                                      | /opt/app/config/alerts.json    |
+| CONNECTION_TIMEOUT_SECONDS | Number of seconds before HTTP(S) and TCP connections will timeout        | 10                             |
+| DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql`       | sqlite                         |
+| SUMMARY_ENABLED            | Whether to emit a summary / digest message to a subset of alert channels | True                           |
+| SUMMARY_SLEEP_SECONDS      | Number of seconds between emitting summary digests                       | 86400                          |
+| SUMMARY_NOTIFICATION_LIST  | List of alert IDs to pass the summary information too                    | (empty)                        |
 
 Note:
 
@@ -129,10 +132,12 @@ Alerts are defined in the following way:
   "alerts": [
     {
       "@type": "alert-slack",
+      "id": "my-slack-channel",
       "url": "https://hooks.slack.com/services/xxx/yyy/zzz"
     },
     {
       "@type": "alert-sns",
+      "id": "my-aws-list",
       "arn": "xxx",
       "region": "yyy"
     }
