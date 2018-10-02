@@ -39,7 +39,7 @@ class PostgreSqlDatabase(Database):
     try:
       con = psycopg2.connect(self.connection_string)
       cur = con.cursor()
-      cur.execute("CREATE TABLE active (environment_group CHARACTER VARYING(500) NOT NULL, environment CHARACTER VARYING(500) NOT NULL, endpoint_group CHARACTER VARYING(500) NOT NULL, endpoint CHARACTER VARYING(500) NOT NULL, timestamp INTEGER NOT NULL, message CHARACTER VARYING(500) NOT NULL)")
+      cur.execute("CREATE TABLE active (environment_group CHARACTER VARYING(500) NOT NULL, environment CHARACTER VARYING(500) NOT NULL, endpoint_group CHARACTER VARYING(500) NOT NULL, endpoint CHARACTER VARYING(500) NOT NULL, timestamp INTEGER NOT NULL, message CHARACTER VARYING(500) NOT NULL, url CHARACTER VARYING(500) NOT NULL)")
       con.commit()
     except psycopg2.Error as e:
       logger.error("postgresql_database: problem during create_schema() - %s" % str(e))
@@ -101,8 +101,8 @@ class PostgreSqlDatabase(Database):
     try:
       con = psycopg2.connect(self.connection_string)
       cur = con.cursor()
-      cur.execute("INSERT INTO active VALUES (%s,%s,%s,%s,%s,%s)",
-        (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.timestamp, incident.message))
+      cur.execute("INSERT INTO active VALUES (%s,%s,%s,%s,%s,%s,%s)",
+        (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.timestamp, incident.message, incident.url))
       con.commit()
     except psycopg2.Error as e:
       logger.error("postgresql_database: problem during save_active() - %s" % str(e))
