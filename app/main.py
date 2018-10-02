@@ -11,7 +11,7 @@ import requests
 import signal
 import os
 import boto3
-from models import Incident
+from models import Incident, Threshold
 import settings
 
 requested_to_quit = False
@@ -205,14 +205,12 @@ def test_endpoint(url, expected, threshold):
                 else:
                     return {
                         "result": False,
-                        "time": test_time,
                         "message": "BAD",
                         "threshold": threshold_result.result
                     }
             else:
                 return {
                     "result": False,
-                    "time": get_relative_time(start_time, time.time()),
                     "actual": status,
                     "message": "BAD"
                 }
@@ -222,7 +220,6 @@ def test_endpoint(url, expected, threshold):
 
         return {
             "result": False,
-            "time": get_relative_time(start_time, time.time()),
             "message": "TIMEOUT"
         }
 
@@ -238,7 +235,6 @@ def test_endpoint(url, expected, threshold):
             )
             return {
                 "result": False,
-                "time": get_relative_time(start_time, time.time()),
                 "message": "TIMEOUT"
             }
         except Exception as e:
@@ -247,7 +243,6 @@ def test_endpoint(url, expected, threshold):
             )
             return {
                 "result": False,
-                "time": get_relative_time(start_time, time.time()),
                 "message": "BAD"
             }
         finally:
@@ -257,12 +252,10 @@ def test_endpoint(url, expected, threshold):
         threshold_result = threshold.result(test_time)
         if threshold_result.okay:
             return {
-                "result": True,
-                "time": test_time
+                "result": True
             }
         return {
             "result": False,
-            "time": test_time,
             "message": "BAD",
             "threshold": threshold_result.result
         }
@@ -281,8 +274,8 @@ def handle_result(incident, alerts, db, url="none"):
     human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
         for attr in attrs if getattr(delta, attr)]
 
-    logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s, time: %s'
-        % (incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result['result'], incident.url, incident.expected, ", ".join(human_readable(incident.result['time']))))
+    logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s'
+        % (incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result['result'], incident.url, incident.expected))
 
     if 'actual' in incident.result:
         logger.info('actual: %s' % incident.result['actual'])
