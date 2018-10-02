@@ -170,6 +170,8 @@ def test_endpoint(url, expected):
 
     parse_result = urlparse(url)
 
+    start_time = time.time()
+
     if parse_result.scheme == 'http' or parse_result.scheme == 'https':
         try:
             conn = None
@@ -189,11 +191,13 @@ def test_endpoint(url, expected):
             if re.match(expected, status):
                 return {
                     "result": True,
+                    "time": relativedelta(seconds=time.time()-start_time),
                     "message": "OK"
                 }
             else:
                 return {
                     "result": False,
+                    "time": relativedelta(seconds=time.time()-start_time),
                     "actual": status,
                     "message": "BAD"
                 }
@@ -203,6 +207,7 @@ def test_endpoint(url, expected):
 
         return {
             "result": False,
+            "time": relativedelta(seconds=time.time()-start_time),
             "message": "TIMEOUT"
         }
 
@@ -218,6 +223,7 @@ def test_endpoint(url, expected):
             )
             return {
                 "result": False,
+                "time": relativedelta(seconds=time.time()-start_time),
                 "message": "TIMEOUT"
             }
         except Exception as e:
@@ -226,12 +232,14 @@ def test_endpoint(url, expected):
             )
             return {
                 "result": False,
+                "time": relativedelta(seconds=time.time()-start_time),
                 "message": "BAD"
             }
         finally:
             s.close()
         return {
-            "result": True
+            "result": True,
+            "time": relativedelta(seconds=time.time()-start_time)
         }
 
 
@@ -239,14 +247,16 @@ def handle_result(incident, alerts, db, url="none"):
     if not lifecycle_continues():
         logger.info('handle_result: bailing')
         return
-    logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s'
-        % (incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result['result'], incident.url, incident.expected))
-    if 'actual' in incident.result:
-        logger.info('actual: %s' % incident.result['actual'])
 
     attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds']
     human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
         for attr in attrs if getattr(delta, attr)]
+
+    logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s, time: %s'
+        % (incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result['result'], incident.url, incident.expected, ", ".join(human_readable(incident.result['time']))))
+
+    if 'actual' in incident.result:
+        logger.info('actual: %s' % incident.result['actual'])
 
     if db.active_exists(incident):
         # there's an existing alert for this tuple
