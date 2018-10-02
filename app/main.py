@@ -245,8 +245,15 @@ def test_endpoint(url, expected):
 
 def get_relative_time(start_time, end_time):
     rd = relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
-    rd['milliseconds'] = int(round(rd['microsecond'] / 1000))
-    return rd
+    return {
+        "years": rd.years,
+        "months": rd.months,
+        "days": rd.days,
+        "hours": rd.hours,
+        "minutes": rd.minutes,
+        "seconds": rd.seconds,
+        "milliseconds": int(round(rd.microsecond / 1000.0))
+    }
 
 
 def handle_result(incident, alerts, db, url="none"):
@@ -255,8 +262,8 @@ def handle_result(incident, alerts, db, url="none"):
         return
 
     attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds', 'milliseconds']
-    human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
-        for attr in attrs if getattr(delta, attr)]
+    human_readable = lambda delta: ['%d %s' % (delta[attr], delta[attr] > 1 and attr or attr[:-1])
+        for attr in attrs if delta[attr]]
 
     logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s, time: %s'
         % (incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result['result'], incident.url, incident.expected, ", ".join(human_readable(incident.result['time']))))
