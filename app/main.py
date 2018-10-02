@@ -197,7 +197,7 @@ def test_endpoint(url, expected, threshold):
             if re.match(expected, status):
                 # result was good but now check if timing was beyond threshold
                 test_time = get_relative_time(start_time, time.time())
-                logger.debug("response time was %dms" % int(round(test_time) / 1000.0)))
+                logger.debug("response time was %dms" % int(round(test_time / 1000.0)))
                 threshold_result = None
                 if threshold is not None:
                     threshold_result = threshold.result(test_time)
