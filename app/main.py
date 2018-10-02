@@ -252,7 +252,7 @@ def handle_result(incident, alerts, db, url="none"):
         logger.info('handle_result: bailing')
         return
 
-    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds', 'microseconds']
+    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds', 'microsecond']
     human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
         for attr in attrs if getattr(delta, attr)]
 
