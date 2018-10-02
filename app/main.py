@@ -94,7 +94,7 @@ def emit_summary(endpoints, alerts, db):
     actives_message = ''
 
     for active in actives:
-        actives_message = actives_message + "{}\n{}\n".format(active['message'], active['url'])
+        actives_message = actives_message + "{}\n".format(active['message'])
 
     if len(actives) == 0:
         message = message + '\n\nCupcake is not currently aware of any alerts.'
