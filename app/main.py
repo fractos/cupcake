@@ -94,7 +94,7 @@ def emit_summary(endpoints, alerts, db):
     actives_message = ''
 
     for active in actives:
-        actives_message = actives_message + active['message'] + '\n'
+        actives_message = actives_message + "{}\n{}\n".format(active['message'], active['url'])
 
     if len(actives) == 0:
         message = message + '\n\nCupcake is not currently aware of any alerts.'
@@ -304,9 +304,9 @@ def handle_result(incident, alerts, db, url="none"):
             logger.info("cleared alert")
 
             delta = relativedelta(seconds=time.time()-active["timestamp"])
-            incident.message = '%s %s %s %s now OK after %s' % \
+            incident.message = '%s %s %s %s now OK after %s\n(%s)' % \
                 (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint,
-                    ", ".join(human_readable(delta)))
+                    ", ".join(human_readable(delta)), incident.url)
 
             db.remove_active(incident)
 
@@ -339,6 +339,8 @@ def handle_result(incident, alerts, db, url="none"):
                     incident.message = incident.message + ", actual: %s" % incident.result["actual"]
                 else:
                     incident.message = incident.message + ", actual: %s" % incident.result["message"]
+
+                incident.message = incident.message + "\n({})".format(incident.url)
 
             db.save_active(incident)
 
