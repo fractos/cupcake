@@ -191,13 +191,13 @@ def test_endpoint(url, expected):
             if re.match(expected, status):
                 return {
                     "result": True,
-                    "time": relativedelta(seconds=time.time()-start_time),
+                    "time": get_relative_time(start_time, time.time()),
                     "message": "OK"
                 }
             else:
                 return {
                     "result": False,
-                    "time": relativedelta(seconds=time.time()-start_time),
+                    "time": get_relative_time(start_time, time.time()),
                     "actual": status,
                     "message": "BAD"
                 }
@@ -207,7 +207,7 @@ def test_endpoint(url, expected):
 
         return {
             "result": False,
-            "time": relativedelta(seconds=time.time()-start_time),
+            "time": get_relative_time(start_time, time.time()),
             "message": "TIMEOUT"
         }
 
@@ -223,7 +223,7 @@ def test_endpoint(url, expected):
             )
             return {
                 "result": False,
-                "time": relativedelta(seconds=time.time()-start_time),
+                "time": get_relative_time(start_time, time.time()),
                 "message": "TIMEOUT"
             }
         except Exception as e:
@@ -232,15 +232,19 @@ def test_endpoint(url, expected):
             )
             return {
                 "result": False,
-                "time": relativedelta(seconds=time.time()-start_time),
+                "time": get_relative_time(start_time, time.time()),
                 "message": "BAD"
             }
         finally:
             s.close()
         return {
             "result": True,
-            "time": relativedelta(seconds=time.time()-start_time)
+            "time": get_relative_time(start_time, time.time())
         }
+
+
+def get_relative_time(start_time, end_time):
+    return relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
 
 
 def handle_result(incident, alerts, db, url="none"):
