@@ -262,8 +262,8 @@ def handle_result(incident, alerts, db, url="none"):
         return
 
     attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds', 'milliseconds']
-    human_readable = lambda delta: ['%d %s' % (delta[attr], delta[attr] > 1 and attr or attr[:-1])
-        for attr in attrs if delta[attr]]
+    human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
+        for attr in attrs if getattr(delta, attr)]
 
     logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s, time: %s'
         % (incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result['result'], incident.url, incident.expected, ", ".join(human_readable(incident.result['time']))))
