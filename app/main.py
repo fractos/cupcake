@@ -95,9 +95,9 @@ def emit_summary(endpoints, alerts, db):
         actives_message = actives_message + active['message'] + '\n'
 
     if len(actives) == 0:
-        message = message + '\n\n\nCupcake is not currently aware of any alerts.'
+        message = message + '\n\nCupcake is not currently aware of any alerts.'
     else:
-        message = message + '\n\n\nCupcake is aware of the following alerts:\n%s' % actives_message
+        message = message + '\n\nCupcake is aware of the following alerts:\n%s' % actives_message
 
     incident = Incident(
         timestamp=time.time(),
@@ -139,7 +139,11 @@ def endpoints_check(endpoints, alerts, db):
                         if 'expected' in endpoint:
                             endpoint_expected = endpoint['expected']
 
-                        result = test_endpoint(url=endpoint_url, expected=endpoint_expected)
+                        endpoint_threshold = None
+                        if 'threshold' in endpoint:
+                            endpoint_threshold = Threshold(endpoint['threshold'])
+
+                        result = test_endpoint(url=endpoint_url, expected=endpoint_expected, threshold=endpoint_threshold)
 
                         incident = Incident(
                             timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
@@ -162,7 +166,7 @@ def endpoints_check(endpoints, alerts, db):
                             return
 
 
-def test_endpoint(url, expected):
+def test_endpoint(url, expected, threshold):
     logger.info('testing endpoint ' + url)
     if not lifecycle_continues():
         logger.info('test_endpoint: bailing')
@@ -189,11 +193,22 @@ def test_endpoint(url, expected):
             status = str(conn.getresponse().status)
             logger.debug('status: %s, expected: %s' % (status, expected))
             if re.match(expected, status):
-                return {
-                    "result": True,
-                    "time": get_relative_time(start_time, time.time()),
-                    "message": "OK"
-                }
+                # result was good but now check if timing was beyond threshold
+                test_time = get_relative_time(start_time, time.time())
+                threshold_result = threshold.result(test_time)
+                if threshold_result.okay:
+                    return {
+                        "result": True,
+                        "time": test_time,
+                        "message": "OK"
+                    }
+                else:
+                    return {
+                        "result": False,
+                        "time": test_time,
+                        "message": "BAD",
+                        "threshold": threshold_result.result
+                    }
             else:
                 return {
                     "result": False,
@@ -237,9 +252,19 @@ def test_endpoint(url, expected):
             }
         finally:
             s.close()
+        # result was good but now check if timing was beyond threshold
+        test_time = get_relative_time(start_time, time.time())
+        threshold_result = threshold.result(test_time)
+        if threshold_result.okay:
+            return {
+                "result": True,
+                "time": test_time
+            }
         return {
-            "result": True,
-            "time": get_relative_time(start_time, time.time())
+            "result": False,
+            "time": test_time,
+            "message": "BAD",
+            "threshold": threshold_result.result
         }
 
 
@@ -261,6 +286,9 @@ def handle_result(incident, alerts, db, url="none"):
 
     if 'actual' in incident.result:
         logger.info('actual: %s' % incident.result['actual'])
+
+    if 'threshold' in incident.result:
+        logger.info('threshold: %s' % incident.result['threshold'])
 
     if db.active_exists(incident):
         # there's an existing alert for this tuple
@@ -292,14 +320,19 @@ def handle_result(incident, alerts, db, url="none"):
             # result was bad
             logger.info("new alert recorded")
             incident.timestamp = time.time()
-            incident.presentation_message = "result was %s" % incident.result["message"]
-            incident.message = '%s %s %s %s expected %s' % (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.expected)
 
-            if 'actual' in incident.result:
-                incident.presentation_message = incident.presentation_message + ", actual: %s" % incident.result["actual"]
-                incident.message = incident.message + ", actual: %s" % incident.result["actual"]
+            if "threshold" in incident.result:
+                incident.presentation_message = "result was %s" % incident.result["threshold"]
+                incident.message = "%s %s %s %s response %s" % (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result["threshold"])
             else:
-                incident.message = incident.message + ", actual: %s" % incident.result["message"]
+                incident.presentation_message = "result was %s" % incident.result["message"]
+                incident.message = "%s %s %s %s expected %s" % (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.expected)
+
+                if "actual" in incident.result:
+                    incident.presentation_message = incident.presentation_message + ", actual: %s" % incident.result["actual"]
+                    incident.message = incident.message + ", actual: %s" % incident.result["actual"]
+                else:
+                    incident.message = incident.message + ", actual: %s" % incident.result["message"]
 
             db.save_active(incident)
 

@@ -30,3 +30,46 @@ class Incident:
             "message": self.message,
             "presentation_message": self.presentation_message
         }
+
+
+class Threshold:
+    """
+    Analyse a timing against a threshold
+    """
+
+    def __init__(self, threshold):
+        if 'min' in threshold:
+            self.min = threshold['min']
+        else:
+            self.min = None
+        if 'max' in threshold:
+            self.max = threshold['max']
+        else:
+            self.max = None
+
+    def result(self, test_time):
+        milliseconds = int(round(int(getattr(test_time, 'microsecond')) / 1000.0))
+
+        if self.min is not None and milliseconds < self.min:
+            return ThresholdResult(
+                okay=False,
+                result='time %d less than minimum %d' % (milliseconds, self.min)
+            )
+
+        if self.max is not None and milliseconds > self.max:
+            return ThresholdResult(
+                okay=False,
+                result='time %d greater than maximum %d' % (milliseconds, self.max)
+            )
+
+        return ThresholdResult()
+
+
+class ThresholdResult:
+    """
+    Hold a result from a threshold analysis
+    """
+
+    def __init__(self, okay=True, result=''):
+        self.okay = okay
+        self.result = result
