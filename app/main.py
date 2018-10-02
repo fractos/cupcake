@@ -195,8 +195,12 @@ def test_endpoint(url, expected, threshold):
             if re.match(expected, status):
                 # result was good but now check if timing was beyond threshold
                 test_time = get_relative_time(start_time, time.time())
-                threshold_result = threshold.result(test_time)
-                if threshold_result.okay:
+
+                threshold_result = None
+                if threshold is not None:
+                    threshold_result = threshold.result(test_time)
+
+                if threshold_result is None or threshold_result.okay:
                     return {
                         "result": True,
                         "time": test_time,
@@ -249,11 +253,16 @@ def test_endpoint(url, expected, threshold):
             s.close()
         # result was good but now check if timing was beyond threshold
         test_time = get_relative_time(start_time, time.time())
-        threshold_result = threshold.result(test_time)
-        if threshold_result.okay:
+
+        threshold_result = None
+        if threshold is not None:
+            threshold_result = threshold.result(test_time)
+
+        if threshold_result is None or threshold_result.okay:
             return {
                 "result": True
             }
+
         return {
             "result": False,
             "message": "BAD",
