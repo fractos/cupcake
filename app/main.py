@@ -244,7 +244,9 @@ def test_endpoint(url, expected):
 
 
 def get_relative_time(start_time, end_time):
-    return relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
+    rd = relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
+    rd['milliseconds'] = int(round(rd['microsecond'] / 1000))
+    return rd
 
 
 def handle_result(incident, alerts, db, url="none"):
@@ -252,7 +254,7 @@ def handle_result(incident, alerts, db, url="none"):
         logger.info('handle_result: bailing')
         return
 
-    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds', 'microsecond']
+    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds', 'milliseconds']
     human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
         for attr in attrs if getattr(delta, attr)]
 
