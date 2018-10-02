@@ -203,7 +203,6 @@ def test_endpoint(url, expected, threshold):
                 if threshold_result is None or threshold_result.okay:
                     return {
                         "result": True,
-                        "time": test_time,
                         "message": "OK"
                     }
                 else:
