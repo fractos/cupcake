@@ -1,4 +1,6 @@
 from logzero import logger
+import logging
+import logzero
 from urllib.parse import urlparse
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
@@ -11,7 +13,7 @@ import requests
 import signal
 import os
 import boto3
-from models import Incident
+from models import Incident, Threshold
 import settings
 
 requested_to_quit = False
@@ -92,12 +94,12 @@ def emit_summary(endpoints, alerts, db):
     actives_message = ''
 
     for active in actives:
-        actives_message = actives_message + active['message'] + '\n'
+        actives_message = actives_message + "{}\n".format(active['message'])
 
     if len(actives) == 0:
-        message = message + '\n\n\nCupcake is not currently aware of any alerts.'
+        message = message + '\n\nCupcake is not currently aware of any alerts.'
     else:
-        message = message + '\n\n\nCupcake is aware of the following alerts:\n%s' % actives_message
+        message = message + '\n\nCupcake is aware of the following alerts:\n%s' % actives_message
 
     incident = Incident(
         timestamp=time.time(),
@@ -139,7 +141,11 @@ def endpoints_check(endpoints, alerts, db):
                         if 'expected' in endpoint:
                             endpoint_expected = endpoint['expected']
 
-                        result = test_endpoint(url=endpoint_url, expected=endpoint_expected)
+                        endpoint_threshold = None
+                        if 'threshold' in endpoint:
+                            endpoint_threshold = Threshold(endpoint['threshold'])
+
+                        result = test_endpoint(url=endpoint_url, expected=endpoint_expected, threshold=endpoint_threshold)
 
                         incident = Incident(
                             timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
@@ -162,13 +168,15 @@ def endpoints_check(endpoints, alerts, db):
                             return
 
 
-def test_endpoint(url, expected):
+def test_endpoint(url, expected, threshold):
     logger.info('testing endpoint ' + url)
     if not lifecycle_continues():
         logger.info('test_endpoint: bailing')
         return False
 
     parse_result = urlparse(url)
+
+    start_time = time.time()
 
     if parse_result.scheme == 'http' or parse_result.scheme == 'https':
         try:
@@ -187,18 +195,33 @@ def test_endpoint(url, expected):
             status = str(conn.getresponse().status)
             logger.debug('status: %s, expected: %s' % (status, expected))
             if re.match(expected, status):
-                return {
-                    "result": True,
-                    "message": "OK"
-                }
-            else:
+                # result was good but now check if timing was beyond threshold
+                test_time = get_relative_time(start_time, time.time())
+                logger.debug("response time was %dms" % int(round(getattr(test_time, "microsecond") / 1000.0)))
+                threshold_result = None
+                if threshold is not None:
+                    threshold_result = threshold.result(test_time)
+
+                if threshold_result is None or threshold_result.okay:
+                    return {
+                        "result": True,
+                        "message": "OK"
+                    }
+
                 return {
                     "result": False,
-                    "actual": status,
-                    "message": "BAD"
+                    "message": "BAD",
+                    "threshold": threshold_result.result
                 }
 
-        except Exception:
+            return {
+                "result": False,
+                "actual": status,
+                "message": "BAD"
+            }
+
+        except Exception as e:
+            logger.debug("error during testing: %s", str(e))
             pass
 
         return {
@@ -230,23 +253,48 @@ def test_endpoint(url, expected):
             }
         finally:
             s.close()
+        # result was good but now check if timing was beyond threshold
+        test_time = get_relative_time(start_time, time.time())
+
+        logger.debug("response time was %dms" % int(round(getattr(test_time, "microsecond") / 1000.0)))
+
+        threshold_result = None
+        if threshold is not None:
+            threshold_result = threshold.result(test_time)
+
+        if threshold_result is None or threshold_result.okay:
+            return {
+                "result": True
+            }
+
         return {
-            "result": True
+            "result": False,
+            "message": "BAD",
+            "threshold": threshold_result.result
         }
+
+
+def get_relative_time(start_time, end_time):
+    return relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
 
 
 def handle_result(incident, alerts, db, url="none"):
     if not lifecycle_continues():
         logger.info('handle_result: bailing')
         return
-    logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s'
+
+    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds', 'microsecond']
+    human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
+        for attr in attrs if getattr(delta, attr)]
+
+    logger.debug('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s'
         % (incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result['result'], incident.url, incident.expected))
+
     if 'actual' in incident.result:
         logger.info('actual: %s' % incident.result['actual'])
 
-    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds']
-    human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
-        for attr in attrs if getattr(delta, attr)]
+    if 'threshold' in incident.result:
+        logger.info('threshold: %s' % incident.result['threshold'])
 
     if db.active_exists(incident):
         # there's an existing alert for this tuple
@@ -256,36 +304,43 @@ def handle_result(incident, alerts, db, url="none"):
             logger.info("cleared alert")
 
             delta = relativedelta(seconds=time.time()-active["timestamp"])
-            incident.message = '%s %s %s %s now OK after %s' % \
+            incident.message = '%s %s %s %s now OK after %s\n(%s)' % \
                 (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint,
-                    ", ".join(human_readable(delta)))
+                    ", ".join(human_readable(delta)), incident.url)
 
             db.remove_active(incident)
 
             process_alerts(incident, alerts)
         else:
             # existing alert continues
-            logger.info("alert continues")
+            logger.debug("alert continues")
             pass
 
     else:
         # no existing alert for this tuple
         if incident.result["result"]:
             # result was good
-            logger.info("no alert")
+            logger.debug("no alert")
             pass
         else:
             # result was bad
             logger.info("new alert recorded")
             incident.timestamp = time.time()
-            incident.presentation_message = "result was %s" % incident.result["message"]
-            incident.message = '%s %s %s %s expected %s' % (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.expected)
 
-            if 'actual' in incident.result:
-                incident.presentation_message = incident.presentation_message + ", actual: %s" % incident.result["actual"]
-                incident.message = incident.message + ", actual: %s" % incident.result["actual"]
+            if "threshold" in incident.result:
+                incident.presentation_message = "result was %s" % incident.result["threshold"]
+                incident.message = "%s %s %s %s response %s" % (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result["threshold"])
             else:
-                incident.message = incident.message + ", actual: %s" % incident.result["message"]
+                incident.presentation_message = "result was %s" % incident.result["message"]
+                incident.message = "%s %s %s %s expected %s" % (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.expected)
+
+                if "actual" in incident.result:
+                    incident.presentation_message = incident.presentation_message + ", actual: %s" % incident.result["actual"]
+                    incident.message = incident.message + ", actual: %s" % incident.result["actual"]
+                else:
+                    incident.message = incident.message + ", actual: %s" % incident.result["message"]
+
+                incident.message = incident.message + "\n({})".format(incident.url)
 
             db.save_active(incident)
 
@@ -293,7 +348,7 @@ def handle_result(incident, alerts, db, url="none"):
 
 
 def process_alerts(incident, alert_definitions):
-    logger.info('processing alerts')
+    logger.debug('processing alerts')
 
     for alert in alert_definitions['alerts']:
 
@@ -305,12 +360,12 @@ def process_alerts(incident, alert_definitions):
 
 
 def alert_slack(incident, alert):
-    logger.info('alert_slack: %s' % incident.message)
+    logger.debug('alert_slack: %s' % incident.message)
     _ = requests.post(alert['url'], json={"text": incident.message, "link_names": 1})
 
 
 def alert_sns(incident, alert):
-    logger.info('alert_sns: %s' % incident.message)
+    logger.debug('alert_sns: %s' % incident.message)
 
     sns_client = boto3.client('sns', alert['region'])
 
@@ -321,4 +376,9 @@ def alert_sns(incident, alert):
 
 
 if __name__ == "__main__":
+    if settings.DEBUG:
+        logzero.loglevel(logging.DEBUG)
+    else:
+        logzero.loglevel(logging.INFO)
+
     main()

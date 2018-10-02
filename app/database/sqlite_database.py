@@ -39,7 +39,7 @@ class SqliteDatabase(Database):
     try:
       con = sqlite3.connect(self.db_name)
       cur = con.cursor()
-      cur.execute("CREATE TABLE active (environment_group TEXT, environment TEXT, endpoint_group TEXT, endpoint TEXT, timestamp INTEGER, message TEXT)")
+      cur.execute("CREATE TABLE active (environment_group TEXT, environment TEXT, endpoint_group TEXT, endpoint TEXT, timestamp INTEGER, message TEXT, url TEXT)")
       con.commit()
     except sqlite3.Error as e:
       logger.error("sqlite_database: problem during create_schema() - %s" % str(e))
@@ -103,8 +103,8 @@ class SqliteDatabase(Database):
     try:
       con = sqlite3.connect(self.db_name)
       cur = con.cursor()
-      cur.execute("INSERT INTO active VALUES (?,?,?,?,?,?)",
-        (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.timestamp, incident.message))
+      cur.execute("INSERT INTO active VALUES (?,?,?,?,?,?,?)",
+        (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.timestamp, incident.message, incident.url))
       con.commit()
     except sqlite3.Error as e:
       logger.error("sqlite_database: problem during save_active() - %s" % str(e))

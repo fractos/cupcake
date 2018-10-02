@@ -10,12 +10,13 @@ If an endpoint times out for connection or if an HTTP/HTTPS endpoint returns a d
 
 Expected status codes for HTTP/HTTPS services is specified with a regular expression.
 
-At the moment Cupcake is only able to emit alerts via a webhook URL such as the one used by Slack's custom webhook integration. This will shortly be joined by the ability to emit alerts to an SNS topic.
+At the moment Cupcake is able to emit alerts via a webhook URL such as the one used by Slack's custom webhook integration and also by sending a JSON blob to an SNS topic.
 
 ## Environment variables
 
 | Name                       | Description                                                              | Default                        |
 |----------------------------|--------------------------------------------------------------------------|--------------------------------|
+| DEBUG                      | Whether to produce debug messages in the log                             | False                          |
 | SLEEP_SECONDS              | Number of seconds to yield between runs                                  | 60                             |
 | ENDPOINT_DEFINITIONS_FILE  | Full path of endpoint definitions file                                   | /opt/app/config/endpoints.json |
 | ALERT_DEFINITIONS_FILE     | Full path of alert definitions file                                      | /opt/app/config/alerts.json    |
@@ -23,7 +24,7 @@ At the moment Cupcake is only able to emit alerts via a webhook URL such as the 
 | DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql`       | sqlite                         |
 | SUMMARY_ENABLED            | Whether to emit a summary / digest message to a subset of alert channels | True                           |
 | SUMMARY_SLEEP_SECONDS      | Number of seconds between emitting summary digests                       | 86400                          |
-| SUMMARY_NOTIFICATION_LIST  | List of alert IDs to pass the summary information too                    | (empty)                        |
+| SUMMARY_NOTIFICATION_LIST  | List of alert IDs to pass the summary information to                    | (empty)                        |
 
 Note:
 
@@ -74,6 +75,8 @@ This gives a great deal of flexibility and range for defining collections of end
 
 The following defines an environment group called "customer ABC" which has an environment called "production". Within that environment are two endpoint groups - "external" and "internal". The "external" endpoint group contains an HTTPS URL for the main website including a regular expression that defines the HTTP status code that it expects to receive (any status code in range 2xx). The "internal" endpoint group contains a TCP URL for a Redis server. It is assumed for this example that Cupcake is situated on a server that is inside the private network and therefore is able to lookup a host named "redis.internal" using some kind of internal DNS scheme (e.g. Route53).
 
+The website endpoint also defines a threshold for the response timing where anything greater than 200 milliseconds will cause an incident to be raised.
+
 ```
 {
   "@type": "endpoint-definitions",
@@ -97,7 +100,11 @@ The following defines an environment group called "customer ABC" which has an en
                   "@type": "endpoint",
                   "id": "website",
                   "url": "https://www.example.com/index.html",
-                  "expected": "^[2]\\d\\d$"
+                  "expected": "^[2]\\d\\d$",
+                  "threshold": {
+                    "min": 0,
+                    "max": 200
+                  }
                 }
               ]
             },
