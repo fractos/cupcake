@@ -244,16 +244,7 @@ def test_endpoint(url, expected):
 
 
 def get_relative_time(start_time, end_time):
-    rd = relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
-    return {
-        "years": rd.years,
-        "months": rd.months,
-        "days": rd.days,
-        "hours": rd.hours,
-        "minutes": rd.minutes,
-        "seconds": rd.seconds,
-        "milliseconds": int(round(rd.microsecond / 1000.0))
-    }
+    return relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
 
 
 def handle_result(incident, alerts, db, url="none"):
