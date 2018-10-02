@@ -4,6 +4,7 @@ import re
 from database.sqlite_database import SqliteDatabase
 from database.postgresql_database import PostgreSqlDatabase
 
+DEBUG = bool(os.getenv("DEBUG", "False"))
 SLEEP_SECONDS = int(os.getenv("SLEEP_SECONDS"))
 ENDPOINT_DEFINITIONS_FILE = os.getenv("ENDPOINT_DEFINITIONS_FILE")
 ALERT_DEFINITIONS_FILE = os.getenv("ALERT_DEFINITIONS_FILE")

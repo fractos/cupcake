@@ -53,13 +53,13 @@ class Threshold:
         if self.min is not None and milliseconds < self.min:
             return ThresholdResult(
                 okay=False,
-                result='time %d less than minimum %d' % (milliseconds, self.min)
+                result='time %dms less than minimum %dms' % (milliseconds, self.min)
             )
 
         if self.max is not None and milliseconds > self.max:
             return ThresholdResult(
                 okay=False,
-                result='time %d greater than maximum %d' % (milliseconds, self.max)
+                result='time %dms greater than maximum %dms' % (milliseconds, self.max)
             )
 
         return ThresholdResult()

@@ -1,4 +1,5 @@
 from logzero import logger
+import logging
 from urllib.parse import urlparse
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
@@ -195,7 +196,7 @@ def test_endpoint(url, expected, threshold):
             if re.match(expected, status):
                 # result was good but now check if timing was beyond threshold
                 test_time = get_relative_time(start_time, time.time())
-
+                logger.debug("response time was %dms" % int(round(test_time / 1000.0)))
                 threshold_result = None
                 if threshold is not None:
                     threshold_result = threshold.result(test_time)
@@ -253,6 +254,8 @@ def test_endpoint(url, expected, threshold):
         # result was good but now check if timing was beyond threshold
         test_time = get_relative_time(start_time, time.time())
 
+        logger.debug("response time was %dms" % int(round(test_time / 1000.0)))
+
         threshold_result = None
         if threshold is not None:
             threshold_result = threshold.result(test_time)
@@ -282,7 +285,7 @@ def handle_result(incident, alerts, db, url="none"):
     human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
         for attr in attrs if getattr(delta, attr)]
 
-    logger.info('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s'
+    logger.debug('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s'
         % (incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result['result'], incident.url, incident.expected))
 
     if 'actual' in incident.result:
@@ -315,7 +318,7 @@ def handle_result(incident, alerts, db, url="none"):
         # no existing alert for this tuple
         if incident.result["result"]:
             # result was good
-            logger.info("no alert")
+            logger.debug("no alert")
             pass
         else:
             # result was bad
@@ -369,4 +372,9 @@ def alert_sns(incident, alert):
 
 
 if __name__ == "__main__":
+    if settings.DEBUG:
+        logzero.loglevel(logging.DEBUG)
+    else:
+        logzero.loglevel(logging.INFO)
+
     main()
