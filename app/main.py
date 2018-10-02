@@ -197,7 +197,7 @@ def test_endpoint(url, expected, threshold):
             if re.match(expected, status):
                 # result was good but now check if timing was beyond threshold
                 test_time = get_relative_time(start_time, time.time())
-                logger.debug("response time was %dms" % int(round(test_time / 1000.0)))
+                logger.debug("response time was %dms" % int(round(test_time) / 1000.0)))
                 threshold_result = None
                 if threshold is not None:
                     threshold_result = threshold.result(test_time)
@@ -207,20 +207,21 @@ def test_endpoint(url, expected, threshold):
                         "result": True,
                         "message": "OK"
                     }
-                else:
-                    return {
-                        "result": False,
-                        "message": "BAD",
-                        "threshold": threshold_result.result
-                    }
-            else:
+
                 return {
                     "result": False,
-                    "actual": status,
-                    "message": "BAD"
+                    "message": "BAD",
+                    "threshold": threshold_result.result
                 }
 
-        except Exception:
+            return {
+                "result": False,
+                "actual": status,
+                "message": "BAD"
+            }
+
+        except Exception as e:
+            logger.debug("error during testing: %s", str(e))
             pass
 
         return {
@@ -312,7 +313,7 @@ def handle_result(incident, alerts, db, url="none"):
             process_alerts(incident, alerts)
         else:
             # existing alert continues
-            logger.info("alert continues")
+            logger.debug("alert continues")
             pass
 
     else:
@@ -345,7 +346,7 @@ def handle_result(incident, alerts, db, url="none"):
 
 
 def process_alerts(incident, alert_definitions):
-    logger.info('processing alerts')
+    logger.debug('processing alerts')
 
     for alert in alert_definitions['alerts']:
 
@@ -357,12 +358,12 @@ def process_alerts(incident, alert_definitions):
 
 
 def alert_slack(incident, alert):
-    logger.info('alert_slack: %s' % incident.message)
+    logger.debug('alert_slack: %s' % incident.message)
     _ = requests.post(alert['url'], json={"text": incident.message, "link_names": 1})
 
 
 def alert_sns(incident, alert):
-    logger.info('alert_sns: %s' % incident.message)
+    logger.debug('alert_sns: %s' % incident.message)
 
     sns_client = boto3.client('sns', alert['region'])
 
