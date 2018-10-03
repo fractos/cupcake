@@ -28,7 +28,7 @@ def alert_slack(incident, alert):
 
 
 def alert_sns(incident, alert):
-    logger.debug('alert_sns: {} {}'.format(alert["id"], incident.message))
+    logger.debug("alert_sns: {} {}".format(alert["id"], incident.message))
 
     sns_client = boto3.client("sns", alert["region"])
 
