@@ -14,6 +14,7 @@ import signal
 import os
 import boto3
 from models import Incident, Threshold
+from alerts import deliver_alert_to_group
 import settings
 
 requested_to_quit = False
@@ -73,7 +74,7 @@ def lifecycle(db):
     endpoints_check(endpoint_definitions, alert_definitions, db)
 
 
-def emit_summary(endpoints, alerts, db):
+def emit_summary(endpoints, alert_definitions, db):
     """
     Show a summary via a subset of notification types
     """
@@ -113,13 +114,10 @@ def emit_summary(endpoints, alerts, db):
         message=message
     )
 
-    for alert in alerts['alerts']:
-        if alert['id'] in settings.SUMMARY_NOTIFICATION_LIST:
-            if alert['@type'] == "alert-slack":
-                alert_slack(incident, alert)
+    deliver_alert_to_group(incident, "summary", alert_definitions)
 
 
-def endpoints_check(endpoints, alerts, db):
+def endpoints_check(endpoints, alert_definitions, db):
     logger.info('collecting endpoint health')
 
     for group in endpoints['groups']:
@@ -160,7 +158,7 @@ def endpoints_check(endpoints, alerts, db):
 
                         handle_result(
                             incident,
-                            alerts=alerts,
+                            alert_definitions=alert_definitions,
                             db=db
                         )
 
@@ -278,7 +276,7 @@ def get_relative_time(start_time, end_time):
     return relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
 
 
-def handle_result(incident, alerts, db, url="none"):
+def handle_result(incident, alert_definitions, db):
     if not lifecycle_continues():
         logger.info('handle_result: bailing')
         return
@@ -310,7 +308,7 @@ def handle_result(incident, alerts, db, url="none"):
 
             db.remove_active(incident)
 
-            process_alerts(incident, alerts)
+            deliver_alert_to_group(incident, "default", alert_definitions)
         else:
             # existing alert continues
             logger.debug("alert continues")
@@ -344,35 +342,7 @@ def handle_result(incident, alerts, db, url="none"):
 
             db.save_active(incident)
 
-            process_alerts(incident, alerts)
-
-
-def process_alerts(incident, alert_definitions):
-    logger.debug('processing alerts')
-
-    for alert in alert_definitions['alerts']:
-
-        type = alert['@type']
-        if type == "alert-slack":
-            alert_slack(incident, alert)
-        elif type == "alert-sns":
-            alert_sns(incident, alert)
-
-
-def alert_slack(incident, alert):
-    logger.debug('alert_slack: %s' % incident.message)
-    _ = requests.post(alert['url'], json={"text": incident.message, "link_names": 1})
-
-
-def alert_sns(incident, alert):
-    logger.debug('alert_sns: %s' % incident.message)
-
-    sns_client = boto3.client('sns', alert['region'])
-
-    _ = sns_client.publish(
-        TopicArn=alert['arn'],
-        Message=json.dumps(incident.as_dict(), indent=4, sort_keys=True)
-    )
+            deliver_alert_to_group(incident, "default", alert_definitions)
 
 
 if __name__ == "__main__":
