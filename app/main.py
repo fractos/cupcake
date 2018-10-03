@@ -176,7 +176,7 @@ def endpoints_check(endpoints, alert_definitions, db):
 
 
 def get_endpoint_alert_groups(endpoints, environment_group_id, environment_id, endpoint_group_id, endpoint_id, default_alert_groups):
-    logger.debug("get_endpoint_alert_groups: {} {} {} {}", environment_group_id, environment_id, endpoint_group_id, endpoint_id)
+    logger.debug("get_endpoint_alert_groups: {} {} {} {}".format(environment_group_id, environment_id, endpoint_group_id, endpoint_id))
 
     alert_groups = default_alert_groups
 
