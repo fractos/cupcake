@@ -205,10 +205,13 @@ def get_endpoint_alert_groups(endpoints, environment_group_id, environment_id, e
 
 
 def get_child_by_property(parent, property, target):
+    logger.debug("get_child_by_property: property={} target={}".format(property, target))
     for child in parent:
         if property in child and child[property] == target:
+            logger.debug("found child with matching property")
             return child
 
+    logger.debug("could not find a child with matching property")
     return None
 
 
