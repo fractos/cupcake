@@ -120,30 +120,20 @@ def emit_summary(endpoints, alert_definitions, db):
 def endpoints_check(endpoints, alert_definitions, db):
     logger.info("collecting endpoint health")
 
-    alert_groups = get_alerts_in_group("default", alert_definitions)
-
     for group in endpoints["groups"]:
         environment_group_id = group["id"]
-        if "alert_groups" in group:
-            alert_groups = group["alert_groups"]
 
         for environment in group["environments"]:
             environment_id = environment["id"]
-            if "alert_groups" in environment:
-                alert_groups = environment["alert_groups"]
 
             for endpoint_group in environment["endpoint-groups"]:
-                endpoint_group_name = endpoint_group["id"]
+                endpoint_group_id = endpoint_group["id"]
                 endpoint_group_enabled = endpoint_group["enabled"]
-                if "alert_groups" in endpoint_group:
-                    alert_groups = endpoint_group["alert_groups"]
 
                 if endpoint_group_enabled == "true":
                     for endpoint in endpoint_group["endpoints"]:
-                        endpoint_name = endpoint["id"]
+                        endpoint_id = endpoint["id"]
                         endpoint_url = endpoint["url"]
-                        if "alert_groups" in endpoint:
-                            alert_groups = endpoint["alert_groups"]
 
                         endpoint_expected = ""
                         if "expected" in endpoint:
@@ -159,12 +149,20 @@ def endpoints_check(endpoints, alert_definitions, db):
                             timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
                             environment_group=environment_group_id,
                             environment=environment_id,
-                            endpoint_group=endpoint_group_name,
-                            endpoint=endpoint_name,
+                            endpoint_group=endpoint_group_id,
+                            endpoint=endpoint_id,
                             result=result,
                             url=endpoint_url,
                             expected=endpoint_expected
                         )
+
+                        alert_groups = get_endpoint_alert_groups(
+                            endpoints=endpoints,
+                            environment_group_id=environment_group_id,
+                            environment_id=environment_id,
+                            endpoint_group_id=endpoint_group_id,
+                            endpoint_id=endpoint_id,
+                            default_alert_groups=get_alerts_in_group("default", alert_definitions))
 
                         handle_result(
                             incident=incident,
@@ -175,6 +173,31 @@ def endpoints_check(endpoints, alert_definitions, db):
 
                         if not lifecycle_continues():
                             return
+
+
+def get_endpoint_alert_groups(endpoints, environment_group_id, environment_id, endpoint_group_id, endpoint_id, default_alert_groups):
+    logger.debug("get_endpoint_alert_groups")
+
+    alert_groups = default_alert_groups
+
+    environment_group = endpoints["groups"][environment_group_id]
+    environment = environment_group["environments"][environment_id]
+    endpoint_group = environment["endpoint-groups"][endpoint_group_id]
+    endpoint = endpoint_group["endpoints"][endpoint_id]
+
+    if "alert_groups" in environment_group:
+        alert_groups = environment_group["alert_groups"]
+
+    if "alert_groups" in environment:
+        alert_groups = environment["alert_groups"]
+
+    if "alert_groups" in endpoint_group:
+        alert_groups = endpoint_group["alert_groups"]
+
+    if "alert_groups" in endpoint:
+        alert_groups = endpoint["alert_groups"]
+
+    return alert_groups
 
 
 def test_endpoint(url, expected, threshold):
