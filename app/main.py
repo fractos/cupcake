@@ -185,21 +185,17 @@ def get_endpoint_alert_groups(endpoints, environment_group_id, environment_id, e
     endpoint_group = get_child_by_property(environment["endpoint-groups"], "id", endpoint_group_id)
     endpoint = get_child_by_property(endpoint_group["endpoints"], "id", endpoint_id)
 
-    if "alert_groups" in environment_group:
-        logger.debug("alert_groups in environment_group")
-        alert_groups = environment_group["alert_groups"]
+    if "alert-groups" in environment_group:
+        alert_groups = environment_group["alert-groups"]
 
-    if "alert_groups" in environment:
-        logger.debug("alert_groups in environment")
-        alert_groups = environment["alert_groups"]
+    if "alert-groups" in environment:
+        alert_groups = environment["alert-groups"]
 
-    if "alert_groups" in endpoint_group:
-        logger.debug("alert_groups in endpoint_group")
-        alert_groups = endpoint_group["alert_groups"]
+    if "alert-groups" in endpoint_group:
+        alert_groups = endpoint_group["alert-groups"]
 
-    if "alert_groups" in endpoint:
-        logger.debug("alert_groups in endpoint")
-        alert_groups = endpoint["alert_groups"]
+    if "alert-groups" in endpoint:
+        alert_groups = endpoint["alert-groups"]
 
     return alert_groups
 
@@ -208,10 +204,8 @@ def get_child_by_property(parent, property, target):
     logger.debug("get_child_by_property: property={} target={}".format(property, target))
     for child in parent:
         if property in child and child[property] == target:
-            logger.debug("found child with matching property")
             return child
 
-    logger.debug("could not find a child with matching property")
     return None
 
 
