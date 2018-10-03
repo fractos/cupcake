@@ -5,7 +5,7 @@ class Incident:
     Hold the fields associated with an incident
     """
 
-    def __init__(self, timestamp, environment_group, environment, endpoint_group, endpoint, result, url, expected, message='', presentation_message=''):
+    def __init__(self, timestamp, environment_group, environment, endpoint_group, endpoint, result, url, expected, message="", presentation_message=""):
         self.timestamp = timestamp
         self.environment_group = environment_group
         self.environment = environment
@@ -38,28 +38,28 @@ class Threshold:
     """
 
     def __init__(self, threshold):
-        if 'min' in threshold:
-            self.min = threshold['min']
+        if "min" in threshold:
+            self.min = threshold["min"]
         else:
             self.min = None
-        if 'max' in threshold:
-            self.max = threshold['max']
+        if "max" in threshold:
+            self.max = threshold["max"]
         else:
             self.max = None
 
     def result(self, test_time):
-        milliseconds = int(round(int(getattr(test_time, 'microsecond')) / 1000.0))
+        milliseconds = int(round(int(getattr(test_time, "microsecond")) / 1000.0))
 
         if self.min is not None and milliseconds < self.min:
             return ThresholdResult(
                 okay=False,
-                result='time %dms less than minimum %dms' % (milliseconds, self.min)
+                result="time {}ms less than minimum {}ms".format(milliseconds, self.min)
             )
 
         if self.max is not None and milliseconds > self.max:
             return ThresholdResult(
                 okay=False,
-                result='time %dms greater than maximum %dms' % (milliseconds, self.max)
+                result="time {}ms greater than maximum {}ms".format(milliseconds, self.max)
             )
 
         return ThresholdResult()
@@ -70,6 +70,6 @@ class ThresholdResult:
     Hold a result from a threshold analysis
     """
 
-    def __init__(self, okay=True, result=''):
+    def __init__(self, okay=True, result=""):
         self.okay = okay
         self.result = result

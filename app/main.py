@@ -14,7 +14,7 @@ import signal
 import os
 import boto3
 from models import Incident, Threshold
-from alerts import deliver_alert_to_group
+from alerts import deliver_alert_to_groups, deliver_alert_to_group, get_alerts_in_group
 import settings
 
 requested_to_quit = False
@@ -78,39 +78,39 @@ def emit_summary(endpoints, alert_definitions, db):
     """
     Show a summary via a subset of notification types
     """
-    logger.info('emit summary')
+    logger.info("emit summary")
 
     number_of_endpoints = 0
 
-    for group in endpoints['groups']:
-        for environment in group['environments']:
-            for endpoint_group in environment['endpoint-groups']:
-                if endpoint_group['enabled'] == "true":
-                    for _ in endpoint_group['endpoints']:
+    for group in endpoints["groups"]:
+        for environment in group["environments"]:
+            for endpoint_group in environment["endpoint-groups"]:
+                if endpoint_group["enabled"] == "true":
+                    for _ in endpoint_group["endpoints"]:
                         number_of_endpoints = number_of_endpoints + 1
 
-    message = 'Cupcake is alive and currently monitoring %d endpoints.' % number_of_endpoints
+    message = "Cupcake is alive and currently monitoring {} endpoints.".format(number_of_endpoints)
 
     actives = db.get_all_actives()
-    actives_message = ''
+    actives_message = ""
 
     for active in actives:
-        actives_message = actives_message + "{}\n".format(active['message'])
+        actives_message = actives_message + "{}\n".format(active["message"])
 
     if len(actives) == 0:
-        message = message + '\n\nCupcake is not currently aware of any alerts.'
+        message = message + "\n\nCupcake is not currently aware of any alerts."
     else:
-        message = message + '\n\nCupcake is aware of the following alerts:\n%s' % actives_message
+        message = message + "\n\nCupcake is aware of the following alerts:\n%s" % actives_message
 
     incident = Incident(
         timestamp=time.time(),
-        environment_group='',
-        environment='',
-        endpoint_group='',
-        endpoint='',
+        environment_group="",
+        environment="",
+        endpoint_group="",
+        endpoint="",
         result={},
-        url='',
-        expected='',
+        url="",
+        expected="",
         message=message
     )
 
@@ -118,30 +118,30 @@ def emit_summary(endpoints, alert_definitions, db):
 
 
 def endpoints_check(endpoints, alert_definitions, db):
-    logger.info('collecting endpoint health')
+    logger.info("collecting endpoint health")
 
-    for group in endpoints['groups']:
-        environment_group_id = group['id']
+    for group in endpoints["groups"]:
+        environment_group_id = group["id"]
 
-        for environment in group['environments']:
-            environment_id = environment['id']
+        for environment in group["environments"]:
+            environment_id = environment["id"]
 
-            for endpoint_group in environment['endpoint-groups']:
-                endpoint_group_name = endpoint_group['id']
-                endpoint_group_enabled = endpoint_group['enabled']
+            for endpoint_group in environment["endpoint-groups"]:
+                endpoint_group_id = endpoint_group["id"]
+                endpoint_group_enabled = endpoint_group["enabled"]
 
                 if endpoint_group_enabled == "true":
-                    for endpoint in endpoint_group['endpoints']:
-                        endpoint_name = endpoint['id']
-                        endpoint_url = endpoint['url']
+                    for endpoint in endpoint_group["endpoints"]:
+                        endpoint_id = endpoint["id"]
+                        endpoint_url = endpoint["url"]
 
-                        endpoint_expected = ''
-                        if 'expected' in endpoint:
-                            endpoint_expected = endpoint['expected']
+                        endpoint_expected = ""
+                        if "expected" in endpoint:
+                            endpoint_expected = endpoint["expected"]
 
                         endpoint_threshold = None
-                        if 'threshold' in endpoint:
-                            endpoint_threshold = Threshold(endpoint['threshold'])
+                        if "threshold" in endpoint:
+                            endpoint_threshold = Threshold(endpoint["threshold"])
 
                         result = test_endpoint(url=endpoint_url, expected=endpoint_expected, threshold=endpoint_threshold)
 
@@ -149,15 +149,24 @@ def endpoints_check(endpoints, alert_definitions, db):
                             timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
                             environment_group=environment_group_id,
                             environment=environment_id,
-                            endpoint_group=endpoint_group_name,
-                            endpoint=endpoint_name,
+                            endpoint_group=endpoint_group_id,
+                            endpoint=endpoint_id,
                             result=result,
                             url=endpoint_url,
                             expected=endpoint_expected
                         )
 
+                        alert_groups = get_endpoint_alert_groups(
+                            endpoints=endpoints,
+                            environment_group_id=environment_group_id,
+                            environment_id=environment_id,
+                            endpoint_group_id=endpoint_group_id,
+                            endpoint_id=endpoint_id,
+                            default_alert_groups=get_alerts_in_group("default", alert_definitions))
+
                         handle_result(
-                            incident,
+                            incident=incident,
+                            alert_groups=alert_groups,
                             alert_definitions=alert_definitions,
                             db=db
                         )
@@ -166,21 +175,52 @@ def endpoints_check(endpoints, alert_definitions, db):
                             return
 
 
+def get_endpoint_alert_groups(endpoints, environment_group_id, environment_id, endpoint_group_id, endpoint_id, default_alert_groups):
+    alert_groups = default_alert_groups
+
+    environment_group = get_child_by_property(endpoints["groups"], "id", environment_group_id)
+    environment = get_child_by_property(environment_group["environments"], "id", environment_id)
+    endpoint_group = get_child_by_property(environment["endpoint-groups"], "id", endpoint_group_id)
+    endpoint = get_child_by_property(endpoint_group["endpoints"], "id", endpoint_id)
+
+    if "alert-groups" in environment_group:
+        alert_groups = environment_group["alert-groups"]
+
+    if "alert-groups" in environment:
+        alert_groups = environment["alert-groups"]
+
+    if "alert-groups" in endpoint_group:
+        alert_groups = endpoint_group["alert-groups"]
+
+    if "alert-groups" in endpoint:
+        alert_groups = endpoint["alert-groups"]
+
+    return alert_groups
+
+
+def get_child_by_property(parent, property, target):
+    for child in parent:
+        if property in child and child[property] == target:
+            return child
+
+    return None
+
+
 def test_endpoint(url, expected, threshold):
-    logger.info('testing endpoint ' + url)
+    logger.info("testing endpoint {}".format(url))
     if not lifecycle_continues():
-        logger.info('test_endpoint: bailing')
+        logger.info("test_endpoint: bailing")
         return False
 
     parse_result = urlparse(url)
 
     start_time = time.time()
 
-    if parse_result.scheme == 'http' or parse_result.scheme == 'https':
+    if parse_result.scheme == "http" or parse_result.scheme == "https":
         try:
             conn = None
 
-            if parse_result.scheme == 'http':
+            if parse_result.scheme == "http":
                 conn = http.client.HTTPConnection(
                     host=parse_result.netloc,
                     timeout=settings.CONNECTION_TIMEOUT)
@@ -189,13 +229,13 @@ def test_endpoint(url, expected, threshold):
                     host=parse_result.netloc,
                     timeout=settings.CONNECTION_TIMEOUT)
 
-            conn.request('GET', parse_result.path)
+            conn.request("GET", parse_result.path)
             status = str(conn.getresponse().status)
-            logger.debug('status: %s, expected: %s' % (status, expected))
+            logger.debug("status: {}, expected: {}".format(status, expected))
             if re.match(expected, status):
                 # result was good but now check if timing was beyond threshold
                 test_time = get_relative_time(start_time, time.time())
-                logger.debug("response time was %dms" % int(round(getattr(test_time, "microsecond") / 1000.0)))
+                logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
                 threshold_result = None
                 if threshold is not None:
                     threshold_result = threshold.result(test_time)
@@ -219,7 +259,7 @@ def test_endpoint(url, expected, threshold):
             }
 
         except Exception as e:
-            logger.debug("error during testing: %s", str(e))
+            logger.debug("error during testing: {}".format(str(e)))
             pass
 
         return {
@@ -228,14 +268,14 @@ def test_endpoint(url, expected, threshold):
         }
 
 
-    elif parse_result.scheme == 'tcp':
+    elif parse_result.scheme == "tcp":
         s = socket.socket()
         try:
             s.settimeout(settings.CONNECTION_TIMEOUT)
             s.connect((parse_result.hostname, parse_result.port))
         except socket.timeout:
             logger.info(
-                "tcp endpoint %s hit timeout" % parse_result.netloc
+                "tcp endpoint {} hit timeout".format(parse_result.netloc)
             )
             return {
                 "result": False,
@@ -243,7 +283,7 @@ def test_endpoint(url, expected, threshold):
             }
         except Exception as e:
             logger.info(
-                "tcp endpoint %s had a problem: %s" % (parse_result.netloc, e)
+                "tcp endpoint {} had a problem: {}".format(parse_result.netloc, e)
             )
             return {
                 "result": False,
@@ -254,7 +294,7 @@ def test_endpoint(url, expected, threshold):
         # result was good but now check if timing was beyond threshold
         test_time = get_relative_time(start_time, time.time())
 
-        logger.debug("response time was %dms" % int(round(getattr(test_time, "microsecond") / 1000.0)))
+        logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
 
         threshold_result = None
         if threshold is not None:
@@ -276,23 +316,22 @@ def get_relative_time(start_time, end_time):
     return relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
 
 
-def handle_result(incident, alert_definitions, db):
+def handle_result(incident, alert_groups, alert_definitions, db):
     if not lifecycle_continues():
-        logger.info('handle_result: bailing')
+        logger.info("handle_result: bailing")
         return
 
-    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds', 'microsecond']
-    human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
+    attrs = ["years", "months", "days", "hours", "minutes", "seconds", "microsecond"]
+    human_readable = lambda delta: ["%d %s" % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
         for attr in attrs if getattr(delta, attr)]
 
-    logger.debug('result: timestamp: %s, environment_group: %s environment: %s, endpoint_group: %s, endpoint: %s, result: %s, url: %s, expected: %s'
-        % (incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result['result'], incident.url, incident.expected))
+    logger.debug("result: timestamp: {}, environment_group: {} environment: {}, endpoint_group: {}, endpoint: {}, result: {}, url: {}, expected: {}".format(incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result["result"], incident.url, incident.expected))
 
-    if 'actual' in incident.result:
-        logger.info('actual: %s' % incident.result['actual'])
+    if "actual" in incident.result:
+        logger.info("actual: {}".format(incident.result["actual"]))
 
-    if 'threshold' in incident.result:
-        logger.info('threshold: %s' % incident.result['threshold'])
+    if "threshold" in incident.result:
+        logger.info("threshold: {}".format(incident.result["threshold"]))
 
     if db.active_exists(incident):
         # there's an existing alert for this tuple
@@ -302,13 +341,12 @@ def handle_result(incident, alert_definitions, db):
             logger.info("cleared alert")
 
             delta = relativedelta(seconds=time.time()-active["timestamp"])
-            incident.message = '%s %s %s %s now OK after %s\n(%s)' % \
-                (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint,
+            incident.message = "{} {} {} {} now OK after {}\n({})".format(incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint,
                     ", ".join(human_readable(delta)), incident.url)
 
             db.remove_active(incident)
 
-            deliver_alert_to_group(incident, "default", alert_definitions)
+            deliver_alert_to_groups(incident, alert_groups, alert_definitions)
         else:
             # existing alert continues
             logger.debug("alert continues")
@@ -326,23 +364,23 @@ def handle_result(incident, alert_definitions, db):
             incident.timestamp = time.time()
 
             if "threshold" in incident.result:
-                incident.presentation_message = "result was %s" % incident.result["threshold"]
-                incident.message = "%s %s %s %s response %s" % (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result["threshold"])
+                incident.presentation_message = "result was {}".format(incident.result["threshold"])
+                incident.message = "{} {} {} {} response {}".format(incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result["threshold"])
             else:
-                incident.presentation_message = "result was %s" % incident.result["message"]
-                incident.message = "%s %s %s %s expected %s" % (incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.expected)
+                incident.presentation_message = "result was {}".format(incident.result["message"])
+                incident.message = "{} {} {} {} expected {}".format(incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.expected)
 
                 if "actual" in incident.result:
-                    incident.presentation_message = incident.presentation_message + ", actual: %s" % incident.result["actual"]
-                    incident.message = incident.message + ", actual: %s" % incident.result["actual"]
+                    incident.presentation_message = "{}, actual: {}".format(incident.presentation_message, incident.result["actual"])
+                    incident.message = "{}, actual: {}".format(incident.message, incident.result["actual"])
                 else:
-                    incident.message = incident.message + ", actual: %s" % incident.result["message"]
+                    incident.message = "{}, actual: {}".format(incident.message, incident.result["message"])
 
-                incident.message = incident.message + "\n({})".format(incident.url)
+                incident.message = "{}\n({})".format(incident.message, incident.url)
 
             db.save_active(incident)
 
-            deliver_alert_to_group(incident, "default", alert_definitions)
+            deliver_alert_to_groups(incident, alert_groups, alert_definitions)
 
 
 if __name__ == "__main__":

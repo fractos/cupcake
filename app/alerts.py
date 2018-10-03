@@ -4,12 +4,24 @@ import requests
 import json
 
 
-def deliver_alert_to_group(incident, alert_group_id, alert_definitions):
-    logger.debug("deliver_alert_to_group: delivering to group id {}".format(alert_group_id))
+def get_alerts_in_group(alert_group_id, alert_definitions):
+    logger.debug("get_alert_group: {}".format(alert_group_id))
     for alert_group in alert_definitions["alert-groups"]:
         if alert_group["id"] == alert_group_id:
             for alert_id in alert_group["alerts"]:
-                deliver_alert(incident, alert_id, alert_definitions)
+                yield alert_id
+
+
+def deliver_alert_to_groups(incident, alert_groups, alert_definitions):
+    logger.debug("deliver_alert_to_groups")
+    for alert_group_id in alert_groups:
+        deliver_alert_to_group(incident, alert_group_id, alert_definitions)
+
+
+def deliver_alert_to_group(incident, alert_group_id, alert_definitions):
+    logger.debug("deliver_alert_to_group: delivering to group id {}".format(alert_group_id))
+    for alert_id in get_alerts_in_group(alert_group_id, alert_definitions):
+        deliver_alert(incident, alert_id, alert_definitions)
 
 
 def deliver_alert(incident, alert_id, alert_definitions):
@@ -28,7 +40,7 @@ def alert_slack(incident, alert):
 
 
 def alert_sns(incident, alert):
-    logger.debug('alert_sns: {} {}'.format(alert["id"], incident.message))
+    logger.debug("alert_sns: {} {}".format(alert["id"], incident.message))
 
     sns_client = boto3.client("sns", alert["region"])
 
