@@ -14,7 +14,7 @@ import signal
 import os
 import boto3
 from models import Incident, Threshold
-from alerts import deliver_alert_to_group
+from alerts import deliver_alert_to_groups, deliver_alert_to_group, get_alerts_in_group
 import settings
 
 requested_to_quit = False
@@ -120,20 +120,30 @@ def emit_summary(endpoints, alert_definitions, db):
 def endpoints_check(endpoints, alert_definitions, db):
     logger.info("collecting endpoint health")
 
+    alert_groups = get_alerts_in_group("default", alert_definitions)
+
     for group in endpoints["groups"]:
         environment_group_id = group["id"]
+        if "alert_groups" in group:
+            alert_groups = group["alert_groups"]
 
         for environment in group["environments"]:
             environment_id = environment["id"]
+            if "alert_groups" in environment:
+                alert_groups = environment["alert_groups"]
 
             for endpoint_group in environment["endpoint-groups"]:
                 endpoint_group_name = endpoint_group["id"]
                 endpoint_group_enabled = endpoint_group["enabled"]
+                if "alert_groups" in endpoint_group:
+                    alert_groups = endpoint_group["alert_groups"]
 
                 if endpoint_group_enabled == "true":
                     for endpoint in endpoint_group["endpoints"]:
                         endpoint_name = endpoint["id"]
                         endpoint_url = endpoint["url"]
+                        if "alert_groups" in endpoint:
+                            alert_groups = endpoint["alert_groups"]
 
                         endpoint_expected = ""
                         if "expected" in endpoint:
@@ -157,7 +167,8 @@ def endpoints_check(endpoints, alert_definitions, db):
                         )
 
                         handle_result(
-                            incident,
+                            incident=incident,
+                            alert_groups=alert_groups,
                             alert_definitions=alert_definitions,
                             db=db
                         )
@@ -276,7 +287,7 @@ def get_relative_time(start_time, end_time):
     return relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
 
 
-def handle_result(incident, alert_definitions, db):
+def handle_result(incident, alert_groups, alert_definitions, db):
     if not lifecycle_continues():
         logger.info("handle_result: bailing")
         return
@@ -306,7 +317,7 @@ def handle_result(incident, alert_definitions, db):
 
             db.remove_active(incident)
 
-            deliver_alert_to_group(incident, "default", alert_definitions)
+            deliver_alert_to_groups(incident, alert_groups, alert_definitions)
         else:
             # existing alert continues
             logger.debug("alert continues")
@@ -340,7 +351,7 @@ def handle_result(incident, alert_definitions, db):
 
             db.save_active(incident)
 
-            deliver_alert_to_group(incident, "default", alert_definitions)
+            deliver_alert_to_groups(incident, alert_groups, alert_definitions)
 
 
 if __name__ == "__main__":
