@@ -176,8 +176,6 @@ def endpoints_check(endpoints, alert_definitions, db):
 
 
 def get_endpoint_alert_groups(endpoints, environment_group_id, environment_id, endpoint_group_id, endpoint_id, default_alert_groups):
-    logger.debug("get_endpoint_alert_groups: {} {} {} {}".format(environment_group_id, environment_id, endpoint_group_id, endpoint_id))
-
     alert_groups = default_alert_groups
 
     environment_group = get_child_by_property(endpoints["groups"], "id", environment_group_id)
@@ -201,7 +199,6 @@ def get_endpoint_alert_groups(endpoints, environment_group_id, environment_id, e
 
 
 def get_child_by_property(parent, property, target):
-    logger.debug("get_child_by_property: property={} target={}".format(property, target))
     for child in parent:
         if property in child and child[property] == target:
             return child
@@ -325,7 +322,7 @@ def handle_result(incident, alert_groups, alert_definitions, db):
         return
 
     attrs = ["years", "months", "days", "hours", "minutes", "seconds", "microsecond"]
-    human_readable = lambda delta: ["{} {}".format(getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
+    human_readable = lambda delta: ["%s %d" % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
         for attr in attrs if getattr(delta, attr)]
 
     logger.debug("result: timestamp: {}, environment_group: {} environment: {}, endpoint_group: {}, endpoint: {}, result: {}, url: {}, expected: {}".format(incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result["result"], incident.url, incident.expected))
