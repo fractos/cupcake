@@ -322,7 +322,7 @@ def handle_result(incident, alert_groups, alert_definitions, db):
         return
 
     attrs = ["years", "months", "days", "hours", "minutes", "seconds", "microsecond"]
-    human_readable = lambda delta: ["%s %d" % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
+    human_readable = lambda delta: ["%d %s" % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
         for attr in attrs if getattr(delta, attr)]
 
     logger.debug("result: timestamp: {}, environment_group: {} environment: {}, endpoint_group: {}, endpoint: {}, result: {}, url: {}, expected: {}".format(incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result["result"], incident.url, incident.expected))
