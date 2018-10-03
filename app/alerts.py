@@ -8,7 +8,8 @@ def get_alerts_in_group(alert_group_id, alert_definitions):
     logger.debug("get_alert_group: {}".format(alert_group_id))
     for alert_group in alert_definitions["alert-groups"]:
         if alert_group["id"] == alert_group_id:
-            return alert_group["alerts"]
+            for alert_id in alert_group["alerts"]:
+                yield alert_id
 
 
 def deliver_alert_to_groups(incident, alert_groups, alert_definitions):
