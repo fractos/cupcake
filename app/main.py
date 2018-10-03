@@ -180,10 +180,10 @@ def get_endpoint_alert_groups(endpoints, environment_group_id, environment_id, e
 
     alert_groups = default_alert_groups
 
-    environment_group = endpoints["groups"][environment_group_id]
-    environment = environment_group["environments"][environment_id]
-    endpoint_group = environment["endpoint-groups"][endpoint_group_id]
-    endpoint = endpoint_group["endpoints"][endpoint_id]
+    environment_group = get_child_by_property(endpoints["groups"], "id", environment_group_id)
+    environment = get_child_by_property(environment_group["environments"], "id", environment_id)
+    endpoint_group = get_child_by_property(environment["endpoint-groups"], "id", endpoint_group_id)
+    endpoint = get_child_by_property(endpoint_group["endpoints"], "id", endpoint_id)
 
     if "alert_groups" in environment_group:
         alert_groups = environment_group["alert_groups"]
@@ -198,6 +198,14 @@ def get_endpoint_alert_groups(endpoints, environment_group_id, environment_id, e
         alert_groups = endpoint["alert_groups"]
 
     return alert_groups
+
+
+def get_child_by_property(parent, property, target):
+    for child in parent:
+        if child[property] == target:
+            return child
+
+    return None
 
 
 def test_endpoint(url, expected, threshold):
