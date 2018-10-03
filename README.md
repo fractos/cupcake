@@ -2,6 +2,21 @@
 
 [![Build Status](https://travis-ci.org/fractos/cupcake.svg?branch=master)](https://travis-ci.org/fractos/cupcake)
 
+## Table of Contents
+<!-- TOC orderedList:false -->
+
+- [Cupcake](#cupcake)
+  - [Table of Contents](#table-of-contents)
+  - [Environment variables](#environment-variables)
+  - [sqlite](#sqlite)
+  - [PostgreSQL](#postgresql)
+  - [Endpoint definition file](#endpoint-definition-file)
+    - [Example](#example)
+  - [Alert definition file](#alert-definition-file)
+    - [Example](#example-1)
+
+<!-- /TOC -->
+
 This is a very simple HTTP, HTTPS and TCP endpoint monitor intended to be the simplest thing that works.
 
 It will work through a file that defines groups of environments and endpoints, currently as a single thread.
@@ -11,6 +26,9 @@ If an endpoint times out for connection or if an HTTP/HTTPS endpoint returns a d
 Expected status codes for HTTP/HTTPS services is specified with a regular expression.
 
 At the moment Cupcake is able to emit alerts via a webhook URL such as the one used by Slack's custom webhook integration and also by sending a JSON blob to an SNS topic.
+
+If the environment variable `SUMMARY_ENABLED` is "True", Cupcake will emit a summary digest at startup and every `SUMMARY_SLEEP_SECONDS` afterwards to the alert group called `summary` (see [Alert definition file](#alert-definition-file), below).
+
 
 ## Environment variables
 
@@ -24,7 +42,6 @@ At the moment Cupcake is able to emit alerts via a webhook URL such as the one u
 | DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql`       | sqlite                         |
 | SUMMARY_ENABLED            | Whether to emit a summary / digest message to a subset of alert channels | True                           |
 | SUMMARY_SLEEP_SECONDS      | Number of seconds between emitting summary digests                       | 86400                          |
-| SUMMARY_NOTIFICATION_LIST  | List of alert IDs to pass the summary information to                    | (empty)                        |
 
 Note:
 
@@ -131,11 +148,41 @@ The website endpoint also defines a threshold for the response timing where anyt
 
 ## Alert definition file
 
-Alerts are defined in the following way:
+Alerts are defined in a separate file. Each alert has a type, an ID and whatever properties it needs to operate. Alerts are grouped together by defining an `alert-group` which references the `id` of the alerts in an array. See the next section for an example.
+
+There are two standard groups: `default` and `summary`.
+
+The `default` group contains the IDs of alerts that should receive incident notifications in the absence of an overriding instruction in the endpoints hierarchy. The `summary` group contains the IDs of alerts that should receive the summary digest that is emitted at startup and periodically thereafter.
+
+### Example
 
 ```
 {
   "@type": "alert-definitions",
+  "alert-groups": [
+    {
+      "@type": "alert-group",
+      "id": "default",
+      "alerts": [
+        "my-slack-channel",
+        "my-aws-list"
+      ]
+    },
+    {
+      "@type": "alert-group",
+      "id": "summary",
+      "alerts": [
+        "slack-cupcake-webhook"
+      ]
+    },
+    {
+      "@type": "alert-group",
+      "id": "mysite",
+      "alerts": [
+        "my-slack-channel"
+      ]
+    }
+  ],
   "alerts": [
     {
       "@type": "alert-slack",

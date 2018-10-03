@@ -13,12 +13,6 @@ DB_TYPE = os.getenv("DB_TYPE")
 SUMMARY_ENABLED = bool(os.getenv("SUMMARY_ENABLED"))
 SUMMARY_SLEEP_SECONDS = int(os.getenv("SUMMARY_SLEEP_SECONDS"))
 
-SUMMARY_NOTIFICATION_LIST = os.getenv("SUMMARY_NOTIFICATION_LIST", "")
-if len(SUMMARY_NOTIFICATION_LIST) > 0:
-  SUMMARY_NOTIFICATION_LIST = re.compile(r'[[" \]]').sub('', os.getenv("SUMMARY_NOTIFICATION_LIST")).split(',')
-else:
-  SUMMARY_NOTIFICATION_LIST = []
-
 
 def get_database():
   if DB_TYPE == "postgresql":
