@@ -14,6 +14,8 @@
     - [Example](#example)
   - [Alert definition file](#alert-definition-file)
     - [Example](#example-1)
+  - [Metrics definitions file](#metrics-definitions-file)
+    - [Example](#example-2)
 
 <!-- /TOC -->
 
@@ -159,7 +161,7 @@ The `default` group contains the IDs of alerts that should receive incident noti
 ```
 {
   "@type": "alert-definitions",
-  "alert-groups": [
+  "groups": [
     {
       "@type": "alert-group",
       "id": "default",
@@ -194,6 +196,39 @@ The `default` group contains the IDs of alerts that should receive incident noti
       "id": "my-aws-list",
       "arn": "xxx",
       "region": "yyy"
+    }
+  ]
+}
+```
+
+## Metrics definitions file
+
+Metrics output is also defined in a separate file. Like alerts, different metrics output streams are organised into groups, with `default` being the default collection of metrics streams that response times will be sent to.
+
+
+### Example
+
+```
+{
+  "@type": "metrics-definitions",
+  "groups": [
+    {
+      "@type": "metrics-group",
+      "id": "default",
+      "metrics": [
+        "cloudwatch"
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "@type": "metrics",
+      "id": "cloudwatch",
+      "provider": {
+        "@type": "cloudwatch",
+        "region": "eu-west-1",
+        "namespace": "CUPCAKE"
+      }
     }
   ]
 }

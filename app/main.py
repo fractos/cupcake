@@ -13,23 +13,29 @@ import requests
 import signal
 import os
 import boto3
-from models import Incident, Threshold
+from models import Incident, Threshold, Metric, Endpoint
 from alerts import deliver_alert_to_groups, deliver_alert_to_group, get_alerts_in_group
+from metrics import deliver_metric_to_groups, get_metrics_in_group
 import settings
 
 requested_to_quit = False
 last_summary_emitted = 0
 
+endpoint_definitions = None
+alert_definitions = None
+metrics_definitions = None
+db = None
 
 def main():
     logger.info("starting...")
 
     setup_signal_handling()
 
+    global db
     db = settings.get_database()
 
     while lifecycle_continues():
-        lifecycle(db)
+        lifecycle()
 
         if lifecycle_continues():
             logger.info("sleeping for %s seconds..." % settings.SLEEP_SECONDS)
@@ -54,8 +60,11 @@ def setup_signal_handling():
     signal.signal(signal.SIGINT, signal_handler)
 
 
-def lifecycle(db):
+def lifecycle():
     global last_summary_emitted
+    global endpoint_definitions
+    global alert_definitions
+    global metrics_definitions
 
     endpoint_definitions = json.loads(
         open(settings.ENDPOINT_DEFINITIONS_FILE).read()
@@ -65,24 +74,32 @@ def lifecycle(db):
         open(settings.ALERT_DEFINITIONS_FILE).read()
     )
 
+    metrics_definitions = json.loads(
+        open(settings.METRICS_DEFINITIONS_FILE).read()
+    )
+
     if settings.SUMMARY_ENABLED:
         seconds=time.time()-last_summary_emitted
         if seconds >= settings.SUMMARY_SLEEP_SECONDS:
             last_summary_emitted = time.time()
-            emit_summary(endpoint_definitions, alert_definitions, db)
+            emit_summary()
 
-    endpoints_check(endpoint_definitions, alert_definitions, db)
+    endpoints_check()
 
 
-def emit_summary(endpoints, alert_definitions, db):
+def emit_summary():
     """
     Show a summary via a subset of notification types
     """
     logger.info("emit summary")
 
+    global endpoint_definitions
+    global alert_definitions
+    global db
+
     number_of_endpoints = 0
 
-    for group in endpoints["groups"]:
+    for group in endpoint_definitions["groups"]:
         for environment in group["environments"]:
             for endpoint_group in environment["endpoint-groups"]:
                 if endpoint_group["enabled"] == "true":
@@ -102,25 +119,25 @@ def emit_summary(endpoints, alert_definitions, db):
     else:
         message = message + "\n\nCupcake is aware of the following alerts:\n%s" % actives_message
 
-    incident = Incident(
-        timestamp=time.time(),
-        environment_group="",
-        environment="",
-        endpoint_group="",
-        endpoint="",
-        result={},
-        url="",
-        expected="",
-        message=message
+    deliver_alert_to_group(
+        incident=Incident(
+            timestamp=time.time(),
+            message=message
+        ),
+        alert_group_id="summary",
+        alert_definitions=alert_definitions
     )
 
-    deliver_alert_to_group(incident, "summary", alert_definitions)
 
+def endpoints_check():
+    global endpoint_definitions
+    global alert_definitions
+    global metrics_definitions
+    global db
 
-def endpoints_check(endpoints, alert_definitions, db):
     logger.info("collecting endpoint health")
 
-    for group in endpoints["groups"]:
+    for group in endpoint_definitions["groups"]:
         environment_group_id = group["id"]
 
         for environment in group["environments"]:
@@ -143,59 +160,72 @@ def endpoints_check(endpoints, alert_definitions, db):
                         if "threshold" in endpoint:
                             endpoint_threshold = Threshold(endpoint["threshold"])
 
-                        result = test_endpoint(url=endpoint_url, expected=endpoint_expected, threshold=endpoint_threshold)
+                        endpoint_model = Endpoint(
+                            environment_group = environment_group_id,
+                            environment = environment_id,
+                            endpoint_group = endpoint_group_id,
+                            endpoint = endpoint_id,
+                            url = endpoint_url
+                        )
+
+                        metrics_groups = get_endpoint_default(
+                            model=endpoint_model,
+                            property="metrics-groups",
+                            default_value=["default"]
+                        )
+
+                        result = test_endpoint(
+                            endpoint=endpoint_model,
+                            expected=endpoint_expected,
+                            threshold=endpoint_threshold,
+                            metrics_groups=metrics_groups
+                        )
 
                         incident = Incident(
                             timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
-                            environment_group=environment_group_id,
-                            environment=environment_id,
-                            endpoint_group=endpoint_group_id,
-                            endpoint=endpoint_id,
+                            endpoint=endpoint_model,
                             result=result,
-                            url=endpoint_url,
                             expected=endpoint_expected
                         )
 
-                        alert_groups = get_endpoint_alert_groups(
-                            endpoints=endpoints,
-                            environment_group_id=environment_group_id,
-                            environment_id=environment_id,
-                            endpoint_group_id=endpoint_group_id,
-                            endpoint_id=endpoint_id,
-                            default_alert_groups=get_alerts_in_group("default", alert_definitions))
+                        alert_groups = get_endpoint_default(
+                            model=endpoint_model,
+                            property="alert-groups",
+                            default_value=get_alerts_in_group("default", alert_definitions)
+                        )
 
                         handle_result(
                             incident=incident,
-                            alert_groups=alert_groups,
-                            alert_definitions=alert_definitions,
-                            db=db
+                            alert_groups=alert_groups
                         )
 
                         if not lifecycle_continues():
                             return
 
 
-def get_endpoint_alert_groups(endpoints, environment_group_id, environment_id, endpoint_group_id, endpoint_id, default_alert_groups):
-    alert_groups = default_alert_groups
+def get_endpoint_default(model, property, default_value):
+    global endpoint_definitions
 
-    environment_group = get_child_by_property(endpoints["groups"], "id", environment_group_id)
-    environment = get_child_by_property(environment_group["environments"], "id", environment_id)
-    endpoint_group = get_child_by_property(environment["endpoint-groups"], "id", endpoint_group_id)
-    endpoint = get_child_by_property(endpoint_group["endpoints"], "id", endpoint_id)
+    result = default_value
 
-    if "alert-groups" in environment_group:
-        alert_groups = environment_group["alert-groups"]
+    environment_group = get_child_by_property(endpoint_definitions["groups"], "id", model.environment_group)
+    environment = get_child_by_property(environment_group["environments"], "id", model.environment)
+    endpoint_group = get_child_by_property(environment["endpoint-groups"], "id", model.endpoint_group)
+    endpoint = get_child_by_property(endpoint_group["endpoints"], "id", model.endpoint)
 
-    if "alert-groups" in environment:
-        alert_groups = environment["alert-groups"]
+    if property in environment_group:
+        result = environment_group[property]
 
-    if "alert-groups" in endpoint_group:
-        alert_groups = endpoint_group["alert-groups"]
+    if property in environment:
+        result = environment[property]
 
-    if "alert-groups" in endpoint:
-        alert_groups = endpoint["alert-groups"]
+    if property in endpoint_group:
+        result = endpoint_group[property]
 
-    return alert_groups
+    if property in endpoint:
+        result = endpoint[property]
+
+    return result
 
 
 def get_child_by_property(parent, property, target):
@@ -206,15 +236,18 @@ def get_child_by_property(parent, property, target):
     return None
 
 
-def test_endpoint(url, expected, threshold):
-    logger.info("testing endpoint {}".format(url))
+def test_endpoint(endpoint, expected, threshold, metrics_groups):
+    global metrics_definitions
+
+    logger.info("testing endpoint {}".format(endpoint.url))
     if not lifecycle_continues():
         logger.info("test_endpoint: bailing")
         return False
 
-    parse_result = urlparse(url)
+    parse_result = urlparse(endpoint.url)
 
     start_time = time.time()
+    test_time = None
 
     if parse_result.scheme == "http" or parse_result.scheme == "https":
         try:
@@ -236,6 +269,14 @@ def test_endpoint(url, expected, threshold):
                 # result was good but now check if timing was beyond threshold
                 test_time = get_relative_time(start_time, time.time())
                 logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
+
+                metrics_record_response_time(
+                    endpoint=endpoint,
+                    timestamp=time.time(),
+                    response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
+                    metrics_groups=metrics_groups
+                )
+
                 threshold_result = None
                 if threshold is not None:
                     threshold_result = threshold.result(test_time)
@@ -252,6 +293,16 @@ def test_endpoint(url, expected, threshold):
                     "threshold": threshold_result.result
                 }
 
+            test_time = get_relative_time(start_time, time.time())
+            logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
+
+            metrics_record_response_time(
+                endpoint=endpoint,
+                timestamp=time.time(),
+                response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
+                metrics_groups=metrics_groups
+            )
+
             return {
                 "result": False,
                 "actual": status,
@@ -262,11 +313,19 @@ def test_endpoint(url, expected, threshold):
             logger.debug("error during testing: {}".format(str(e)))
             pass
 
+        test_time = get_relative_time(start_time, time.time())
+
+        metrics_record_response_time(
+            endpoint=endpoint,
+            timestamp=time.time(),
+            response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
+            metrics_groups=metrics_groups
+        )
+
         return {
             "result": False,
             "message": "TIMEOUT"
         }
-
 
     elif parse_result.scheme == "tcp":
         s = socket.socket()
@@ -277,11 +336,32 @@ def test_endpoint(url, expected, threshold):
             logger.info(
                 "tcp endpoint {} hit timeout".format(parse_result.netloc)
             )
+
+            test_time = get_relative_time(start_time, time.time())
+
+            metrics_record_response_time(
+                endpoint=endpoint,
+                timestamp=time.time(),
+                response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
+                metrics_groups=metrics_groups
+            )
+
             return {
                 "result": False,
                 "message": "TIMEOUT"
             }
+
         except Exception as e:
+
+            test_time = get_relative_time(start_time, time.time())
+
+            metrics_record_response_time(
+                endpoint=endpoint,
+                timestamp=time.time(),
+                response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
+                metrics_groups=metrics_groups
+            )
+
             logger.info(
                 "tcp endpoint {} had a problem: {}".format(parse_result.netloc, e)
             )
@@ -289,12 +369,20 @@ def test_endpoint(url, expected, threshold):
                 "result": False,
                 "message": "BAD"
             }
+
         finally:
             s.close()
         # result was good but now check if timing was beyond threshold
         test_time = get_relative_time(start_time, time.time())
 
         logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
+
+        metrics_record_response_time(
+            endpoint=endpoint,
+            timestamp=time.time(),
+            response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
+            metrics_groups=metrics_groups
+        )
 
         threshold_result = None
         if threshold is not None:
@@ -312,11 +400,30 @@ def test_endpoint(url, expected, threshold):
         }
 
 
+def metrics_record_response_time(endpoint, timestamp, response_time, metrics_groups):
+    global metrics_definitions
+
+    logger.debug("metrics_record_response_time({}, {}, {})".format(
+        endpoint.url, str(timestamp), str(response_time)))
+
+    metric = Metric(
+        endpoint=endpoint,
+        timestamp=timestamp,
+        name='RESPONSE-TIME',
+        data=response_time
+    )
+
+    deliver_metric_to_groups(metric, metrics_groups, metrics_definitions)
+
+
 def get_relative_time(start_time, end_time):
     return relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
 
 
-def handle_result(incident, alert_groups, alert_definitions, db):
+def handle_result(incident, alert_groups):
+    global alert_definitions
+    global db
+
     if not lifecycle_continues():
         logger.info("handle_result: bailing")
         return
@@ -325,7 +432,16 @@ def handle_result(incident, alert_groups, alert_definitions, db):
     human_readable = lambda delta: ["%d %s" % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
         for attr in attrs if getattr(delta, attr)]
 
-    logger.debug("result: timestamp: {}, environment_group: {} environment: {}, endpoint_group: {}, endpoint: {}, result: {}, url: {}, expected: {}".format(incident.timestamp, incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result["result"], incident.url, incident.expected))
+    logger.debug("result: timestamp: {}, environment_group: {} environment: {}, endpoint_group: {}, endpoint: {}, result: {}, url: {}, expected: {}".format(
+        incident.timestamp,
+        incident.endpoint.environment_group,
+        incident.endpoint.environment,
+        incident.endpoint.endpoint_group,
+        incident.endpoint.endpoint,
+        incident.result["result"],
+        incident.endpoint.url,
+        incident.expected
+    ))
 
     if "actual" in incident.result:
         logger.info("actual: {}".format(incident.result["actual"]))
@@ -341,8 +457,10 @@ def handle_result(incident, alert_groups, alert_definitions, db):
             logger.info("cleared alert")
 
             delta = relativedelta(seconds=time.time()-active["timestamp"])
-            incident.message = "{} {} {} {} now OK after {}\n({})".format(incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint,
-                    ", ".join(human_readable(delta)), incident.url)
+            incident.message = "{} now OK after {}\n".format(
+                repr(incident.endpoint),
+                ", ".join(human_readable(delta))
+            )
 
             db.remove_active(incident)
 
@@ -365,18 +483,36 @@ def handle_result(incident, alert_groups, alert_definitions, db):
 
             if "threshold" in incident.result:
                 incident.presentation_message = "result was {}".format(incident.result["threshold"])
-                incident.message = "{} {} {} {} response {}".format(incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.result["threshold"])
+                incident.message = "{} response {}".format(
+                    repr(incident.endpoint),
+                    incident.result["threshold"]
+                )
             else:
                 incident.presentation_message = "result was {}".format(incident.result["message"])
-                incident.message = "{} {} {} {} expected {}".format(incident.environment_group, incident.environment, incident.endpoint_group, incident.endpoint, incident.expected)
+                incident.message = "{} expected {}".format(
+                    repr(incident.endpoint),
+                    incident.expected
+                )
 
                 if "actual" in incident.result:
-                    incident.presentation_message = "{}, actual: {}".format(incident.presentation_message, incident.result["actual"])
-                    incident.message = "{}, actual: {}".format(incident.message, incident.result["actual"])
+                    incident.presentation_message = "{}, actual: {}".format(
+                        incident.presentation_message,
+                        incident.result["actual"]
+                    )
+                    incident.message = "{}, actual: {}".format(
+                        incident.message,
+                        incident.result["actual"]
+                    )
                 else:
-                    incident.message = "{}, actual: {}".format(incident.message, incident.result["message"])
+                    incident.message = "{}, actual: {}".format(
+                        incident.message,
+                        incident.result["message"]
+                    )
 
-                incident.message = "{}\n({})".format(incident.message, incident.url)
+                incident.message = "{}\n({})".format(
+                    incident.message,
+                    incident.endpoint.url
+                )
 
             db.save_active(incident)
 

@@ -5,14 +5,10 @@ class Incident:
     Hold the fields associated with an incident
     """
 
-    def __init__(self, timestamp, environment_group, environment, endpoint_group, endpoint, result, url, expected, message="", presentation_message=""):
+    def __init__(self, timestamp, endpoint=None, result={}, expected="", message="", presentation_message=""):
         self.timestamp = timestamp
-        self.environment_group = environment_group
-        self.environment = environment
-        self.endpoint_group = endpoint_group
         self.endpoint = endpoint
         self.result = result
-        self.url = url
         self.expected = expected
         self.message = message
         self.presentation_message = presentation_message
@@ -20,12 +16,12 @@ class Incident:
     def as_dict(self):
         return {
             "timestamp": self.timestamp,
-            "environment_group": self.environment_group,
-            "environment": self.environment,
-            "endpoint_group": self.endpoint_group,
-            "endpoint": self.endpoint,
+            "environment_group": "" if self.endpoint is None else self.endpoint.environment_group,
+            "environment": "" if self.endpoint is None else self.endpoint.environment,
+            "endpoint_group": "" if self.endpoint is None else self.endpoint.endpoint_group,
+            "endpoint": "" if self.endpoint is None else self.endpoint.endpoint,
             "result": self.result,
-            "url": self.url,
+            "url": "" if self.endpoint is None else self.endpoint.url,
             "expected": self.expected,
             "message": self.message,
             "presentation_message": self.presentation_message
@@ -73,3 +69,38 @@ class ThresholdResult:
     def __init__(self, okay=True, result=""):
         self.okay = okay
         self.result = result
+
+
+class Endpoint:
+    """
+    Represent an endpoint's metadata
+    """
+
+    def __init__(self, environment_group, environment, endpoint_group, endpoint, url):
+        self.environment_group = environment_group
+        self.environment = environment
+        self.endpoint_group = endpoint_group
+        self.endpoint = endpoint
+        self.url = url
+
+
+    def __repr__(self):
+        return "{} {} {} {} ({})".format(
+            self.environment_group,
+            self.environment,
+            self.endpoint_group,
+            self.endpoint,
+            self.url
+        )
+
+
+class Metric:
+    """
+    Represent a metric to be recorded
+    """
+
+    def __init__(self, endpoint, timestamp, name, data):
+        self.endpoint = endpoint
+        self.timestamp = timestamp
+        self.name = name
+        self.data = data

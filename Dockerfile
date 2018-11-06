@@ -9,6 +9,7 @@ RUN apk add --update --no-cache --virtual=run-deps \
 ENV SLEEP_SECONDS 60
 ENV ENDPOINT_DEFINITIONS_FILE /opt/app/config/endpoints.json
 ENV ALERT_DEFINITIONS_FILE /opt/app/config/alerts.json
+ENV METRICS_DEFINITIONS_FILE /opt/app/config/metrics.json
 ENV DB_NAME cupcake.db
 ENV DB_TYPE sqlite
 ENV CONNECTION_TIMEOUT_SECONDS 10
@@ -22,3 +23,4 @@ COPY requirements.txt /opt/app/
 RUN pip3 install --no-cache-dir -r /opt/app/requirements.txt
 
 COPY app /opt/app/
+#COPY config /opt/app/config

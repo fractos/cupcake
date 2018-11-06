@@ -13,6 +13,7 @@ CONNECTION_TIMEOUT = int(os.getenv("CONNECTION_TIMEOUT_SECONDS"))
 DB_TYPE = os.getenv("DB_TYPE")
 SUMMARY_ENABLED = bool(distutils.util.strtobool(os.getenv("SUMMARY_ENABLED")))
 SUMMARY_SLEEP_SECONDS = int(os.getenv("SUMMARY_SLEEP_SECONDS"))
+METRICS_DEFINITIONS_FILE = os.getenv("METRICS_DEFINITIONS_FILE")
 
 
 def get_database():
