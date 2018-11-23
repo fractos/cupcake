@@ -60,6 +60,18 @@ def setup_signal_handling():
     signal.signal(signal.SIGINT, signal_handler)
 
 
+def get_file_or_s3(uri):
+    logger.info("getting file URI %s" % uri)
+
+    if uri.lower().startswith("s3://"):
+        s3 = boto3.resource("s3")
+        parse_result = urlparse(uri)
+        s3_object = s3.Object(parse_result.netloc, parse_result.path.lstrip("/"))
+        return s3_object.get()["Body"].read().decode("utf-8")
+
+    return open(uri).read()
+
+
 def lifecycle():
     global last_summary_emitted
     global endpoint_definitions
@@ -67,15 +79,15 @@ def lifecycle():
     global metrics_definitions
 
     endpoint_definitions = json.loads(
-        open(settings.ENDPOINT_DEFINITIONS_FILE).read()
+        get_file_or_s3(settings.ENDPOINT_DEFINITIONS_FILE)
     )
 
     alert_definitions = json.loads(
-        open(settings.ALERT_DEFINITIONS_FILE).read()
+        get_file_or_s3(settings.ALERT_DEFINITIONS_FILE)
     )
 
     metrics_definitions = json.loads(
-        open(settings.METRICS_DEFINITIONS_FILE).read()
+        get_file_or_s3(settings.METRICS_DEFINITIONS_FILE)
     )
 
     if settings.SUMMARY_ENABLED:

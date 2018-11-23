@@ -17,7 +17,7 @@ ENV SUMMARY_ENABLED False
 ENV SUMMARY_SLEEP_SECONDS 86400
 
 WORKDIR /opt/app
-CMD ["python3", "-u", "main.py"]
+CMD ["python3", "-u", "cupcake.py"]
 
 COPY requirements.txt /opt/app/
 RUN pip3 install --no-cache-dir -r /opt/app/requirements.txt

@@ -38,8 +38,9 @@ If the environment variable `SUMMARY_ENABLED` is "True", Cupcake will emit a sum
 |----------------------------|--------------------------------------------------------------------------|--------------------------------|
 | DEBUG                      | Whether to produce debug messages in the log                             | False                          |
 | SLEEP_SECONDS              | Number of seconds to yield between runs                                  | 60                             |
-| ENDPOINT_DEFINITIONS_FILE  | Full path of endpoint definitions file                                   | /opt/app/config/endpoints.json |
-| ALERT_DEFINITIONS_FILE     | Full path of alert definitions file                                      | /opt/app/config/alerts.json    |
+| ENDPOINT_DEFINITIONS_FILE  | Full path or S3 URL of endpoint definitions file                         | /opt/app/config/endpoints.json |
+| ALERT_DEFINITIONS_FILE     | Full path or S3 URL of alert definitions file                            | /opt/app/config/alerts.json    |
+| METRICS_DEFINITIONS_FILE   | Full path or S3 URL of metrics defintions file                           | /opt/app/config/metrics.json   |
 | CONNECTION_TIMEOUT_SECONDS | Number of seconds before HTTP(S) and TCP connections will timeout        | 10                             |
 | DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql`       | sqlite                         |
 | SUMMARY_ENABLED            | Whether to emit a summary / digest message to a subset of alert channels | True                           |
