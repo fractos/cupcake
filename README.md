@@ -14,6 +14,8 @@
     - [Example](#example)
   - [Alert definition file](#alert-definition-file)
     - [Example](#example-1)
+  - [Metrics definitions file](#metrics-definitions-file)
+    - [Example](#example-2)
 
 <!-- /TOC -->
 
@@ -36,8 +38,9 @@ If the environment variable `SUMMARY_ENABLED` is "True", Cupcake will emit a sum
 |----------------------------|--------------------------------------------------------------------------|--------------------------------|
 | DEBUG                      | Whether to produce debug messages in the log                             | False                          |
 | SLEEP_SECONDS              | Number of seconds to yield between runs                                  | 60                             |
-| ENDPOINT_DEFINITIONS_FILE  | Full path of endpoint definitions file                                   | /opt/app/config/endpoints.json |
-| ALERT_DEFINITIONS_FILE     | Full path of alert definitions file                                      | /opt/app/config/alerts.json    |
+| ENDPOINT_DEFINITIONS_FILE  | Full path or S3 URL of endpoint definitions file                         | /opt/app/config/endpoints.json |
+| ALERT_DEFINITIONS_FILE     | Full path or S3 URL of alert definitions file                            | /opt/app/config/alerts.json    |
+| METRICS_DEFINITIONS_FILE   | Full path or S3 URL of metrics defintions file                           | /opt/app/config/metrics.json   |
 | CONNECTION_TIMEOUT_SECONDS | Number of seconds before HTTP(S) and TCP connections will timeout        | 10                             |
 | DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql`       | sqlite                         |
 | SUMMARY_ENABLED            | Whether to emit a summary / digest message to a subset of alert channels | True                           |
@@ -159,7 +162,7 @@ The `default` group contains the IDs of alerts that should receive incident noti
 ```
 {
   "@type": "alert-definitions",
-  "alert-groups": [
+  "groups": [
     {
       "@type": "alert-group",
       "id": "default",
@@ -194,6 +197,39 @@ The `default` group contains the IDs of alerts that should receive incident noti
       "id": "my-aws-list",
       "arn": "xxx",
       "region": "yyy"
+    }
+  ]
+}
+```
+
+## Metrics definitions file
+
+Metrics output is also defined in a separate file. Like alerts, different metrics output streams are organised into groups, with `default` being the default collection of metrics streams that response times will be sent to.
+
+
+### Example
+
+```
+{
+  "@type": "metrics-definitions",
+  "groups": [
+    {
+      "@type": "metrics-group",
+      "id": "default",
+      "metrics": [
+        "cloudwatch"
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "@type": "metrics",
+      "id": "cloudwatch",
+      "provider": {
+        "@type": "cloudwatch",
+        "region": "eu-west-1",
+        "namespace": "CUPCAKE"
+      }
     }
   ]
 }
