@@ -187,7 +187,7 @@ def endpoints_check():
                         )
 
                         attempt = 0
-                        keep_trying = False
+                        keep_trying = True
                         while keep_trying:
                             result = test_endpoint(
                                 endpoint=endpoint_model,
@@ -200,6 +200,8 @@ def endpoints_check():
                                 if attempt <= 3:
                                     logger.info("re-testing timed out endpoint (attempt {} failed)".format(attempt))
                                     keep_trying = True
+                                    continue
+                            break
 
                         incident = Incident(
                             timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
