@@ -7,7 +7,7 @@ from models import Metric, Endpoint
 _cloudwatch_client = None
 
 def get_metrics_in_group(metrics_group_id, metrics_definitions):
-    print("get_metrics_in_group: {}".format(metrics_group_id))
+    logger.debug("get_metrics_in_group: {}".format(metrics_group_id))
     for metrics_group in metrics_definitions["groups"]:
         if metrics_group["id"] == metrics_group_id:
             for metrics_id in metrics_group["metrics"]:
@@ -15,19 +15,19 @@ def get_metrics_in_group(metrics_group_id, metrics_definitions):
 
 
 def deliver_metric_to_groups(metric, metrics_groups, metrics_definitions):
-    print("deliver_metric_to_groups ({})".format(",".join(metrics_groups)))
+    logger.debug("deliver_metric_to_groups ({})".format(",".join(metrics_groups)))
     for metrics_group_id in metrics_groups:
         deliver_metric_to_group(metric, metrics_group_id, metrics_definitions)
 
 
 def deliver_metric_to_group(metric, metrics_group_id, metrics_definitions):
-    print("deliver_metric_to_group: delivering to group id {}".format(metrics_group_id))
+    logger.debug("deliver_metric_to_group: delivering to group id {}".format(metrics_group_id))
     for metrics_id in get_metrics_in_group(metrics_group_id, metrics_definitions):
         deliver_metric(metric, metrics_id, metrics_definitions)
 
 
 def deliver_metric(metric, metrics_id, metrics_definitions):
-    print("deliver_metric: delivering to id {}".format(metrics_id))
+    logger.debug("deliver_metric: delivering to id {}".format(metrics_id))
     for metrics in metrics_definitions["metrics"]:
         if metrics["id"] == metrics_id:
             if metrics["provider"]["@type"] == "cloudwatch":
@@ -35,7 +35,7 @@ def deliver_metric(metric, metrics_id, metrics_definitions):
 
 
 def metrics_cloudwatch(metric, metrics):
-    print("metrics_cloudwatch: {} {}".format(metrics["id"], metric.data))
+    logger.debug("metrics_cloudwatch: {} {}".format(metrics["id"], metric.data))
     cloudwatch = cloudwatch_client(metrics["provider"])
     cloudwatch.put_metric_data(
         MetricData=[
