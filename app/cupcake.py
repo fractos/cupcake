@@ -186,12 +186,20 @@ def endpoints_check():
                             default_value=["default"]
                         )
 
-                        result = test_endpoint(
-                            endpoint=endpoint_model,
-                            expected=endpoint_expected,
-                            threshold=endpoint_threshold,
-                            metrics_groups=metrics_groups
-                        )
+                        attempt = 0
+                        keep_trying = False
+                        while keep_trying:
+                            result = test_endpoint(
+                                endpoint=endpoint_model,
+                                expected=endpoint_expected,
+                                threshold=endpoint_threshold,
+                                metrics_groups=metrics_groups
+                            )
+                            if not result["result"] and result["message"] == "TIMEOUT":
+                                attempt = attempt + 1
+                                if attempt <= 3:
+                                    logger.info("re-testing timed out endpoint (attempt {} failed)".format(attempt))
+                                    keep_trying = True
 
                         incident = Incident(
                             timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
