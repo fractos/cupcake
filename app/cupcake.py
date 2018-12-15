@@ -149,54 +149,54 @@ def endpoints_check():
 
     print("collecting endpoint health")
 
-    for group in endpoint_definitions["groups"]:
-        environment_group_id = group["id"]
-
-        for environment in group["environments"]:
-            environment_id = environment["id"]
-
-            for endpoint_group in environment["endpoint-groups"]:
-                endpoint_group_id = endpoint_group["id"]
-                endpoint_group_enabled = endpoint_group["enabled"]
-
-                if endpoint_group_enabled == "true":
-                    for endpoint in endpoint_group["endpoints"]:
-                        endpoint_id = endpoint["id"]
-                        endpoint_url = endpoint["url"]
-
-                        endpoint_expected = ""
-                        if "expected" in endpoint:
-                            endpoint_expected = endpoint["expected"]
-
-                        endpoint_threshold = None
-                        if "threshold" in endpoint:
-                            endpoint_threshold = Threshold(endpoint["threshold"])
-
-                        endpoint_model = Endpoint(
-                            environment_group = environment_group_id,
-                            environment = environment_id,
-                            endpoint_group = endpoint_group_id,
-                            endpoint = endpoint_id,
-                            url = endpoint_url
-                        )
-
-                        metrics_groups = get_endpoint_default(
-                            model=endpoint_model,
-                            property="metrics-groups",
-                            default_value=["default"]
-                        )
-
-                        alert_groups = get_endpoint_default(
-                            model=endpoint_model,
-                            property="alert-groups",
-                            default_value=get_alerts_in_group("default", alert_definitions)
-                        )
-
-                        thread_args.append((endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold))
-
     with ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as executor:
-        for args in thread_args:
-            executor.submit(fn=run_test, args=args)
+
+        for group in endpoint_definitions["groups"]:
+            environment_group_id = group["id"]
+
+            for environment in group["environments"]:
+                environment_id = environment["id"]
+
+                for endpoint_group in environment["endpoint-groups"]:
+                    endpoint_group_id = endpoint_group["id"]
+                    endpoint_group_enabled = endpoint_group["enabled"]
+
+                    if endpoint_group_enabled == "true":
+                        for endpoint in endpoint_group["endpoints"]:
+                            endpoint_id = endpoint["id"]
+                            endpoint_url = endpoint["url"]
+
+                            endpoint_expected = ""
+                            if "expected" in endpoint:
+                                endpoint_expected = endpoint["expected"]
+
+                            endpoint_threshold = None
+                            if "threshold" in endpoint:
+                                endpoint_threshold = Threshold(endpoint["threshold"])
+
+                            endpoint_model = Endpoint(
+                                environment_group = environment_group_id,
+                                environment = environment_id,
+                                endpoint_group = endpoint_group_id,
+                                endpoint = endpoint_id,
+                                url = endpoint_url
+                            )
+
+                            metrics_groups = get_endpoint_default(
+                                model=endpoint_model,
+                                property="metrics-groups",
+                                default_value=["default"]
+                            )
+
+                            alert_groups = get_endpoint_default(
+                                model=endpoint_model,
+                                property="alert-groups",
+                                default_value=get_alerts_in_group("default", alert_definitions)
+                            )
+
+                            executor.submit(
+                                fn=run_test,
+                                args=(endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold))
 
 
 def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold):
