@@ -194,9 +194,7 @@ def endpoints_check():
                                 default_value=get_alerts_in_group("default", alert_definitions)
                             )
 
-                            executor.submit(
-                                fn=run_test,
-                                args=(endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold))
+                            executor.submit(run_test, endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold)
 
 
 def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold):
