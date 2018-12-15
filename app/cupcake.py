@@ -4,6 +4,7 @@ import logzero
 from urllib.parse import urlparse
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
+from concurrent.futures.thread import ThreadPoolExecutor
 import re
 import socket
 import http.client
@@ -147,6 +148,8 @@ def endpoints_check():
     global metrics_definitions
     global db
 
+    thread_args = []
+
     logger.info("collecting endpoint health")
 
     for group in endpoint_definitions["groups"]:
@@ -186,43 +189,48 @@ def endpoints_check():
                             default_value=["default"]
                         )
 
-                        attempt = 0
-                        keep_trying = True
-                        while keep_trying:
-                            result = test_endpoint(
-                                endpoint=endpoint_model,
-                                expected=endpoint_expected,
-                                threshold=endpoint_threshold,
-                                metrics_groups=metrics_groups
-                            )
-                            if not result["result"] and result["message"] == "TIMEOUT":
-                                attempt = attempt + 1
-                                if attempt <= 3:
-                                    logger.info("re-testing timed out endpoint (attempt {} failed)".format(attempt))
-                                    keep_trying = True
-                                    continue
-                            break
-
-                        incident = Incident(
-                            timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
-                            endpoint=endpoint_model,
-                            result=result,
-                            expected=endpoint_expected
-                        )
-
                         alert_groups = get_endpoint_default(
                             model=endpoint_model,
                             property="alert-groups",
                             default_value=get_alerts_in_group("default", alert_definitions)
                         )
 
-                        handle_result(
-                            incident=incident,
-                            alert_groups=alert_groups
-                        )
+                        thread_args.append((endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold))
 
-                        if not lifecycle_continues():
-                            return
+    with ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as executor:
+        for args in thread_args:
+            executor.submit(fn=run_test, args=args)
+
+
+def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold):
+    attempt = 0
+    keep_trying = True
+    while keep_trying:
+        result = test_endpoint(
+            endpoint=endpoint_model,
+            expected=endpoint_expected,
+            threshold=endpoint_threshold,
+            metrics_groups=metrics_groups
+        )
+        if not result["result"] and result["message"] == "TIMEOUT":
+            attempt = attempt + 1
+            if attempt <= 3:
+                logger.info("re-testing timed out endpoint ({}) (attempt {} failed)".format(endpoint_model.url, attempt))
+                keep_trying = True
+                continue
+        break
+
+    incident = Incident(
+        timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
+        endpoint=endpoint_model,
+        result=result,
+        expected=endpoint_expected
+    )
+
+    handle_result(
+        incident=incident,
+        alert_groups=alert_groups
+    )
 
 
 def get_endpoint_default(model, property, default_value):
