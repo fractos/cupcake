@@ -4,6 +4,7 @@ import logzero
 from urllib.parse import urlparse
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
+from concurrent.futures.thread import ThreadPoolExecutor
 import re
 import socket
 import http.client
@@ -147,72 +148,87 @@ def endpoints_check():
     global metrics_definitions
     global db
 
+    thread_args = []
+
     logger.info("collecting endpoint health")
 
-    for group in endpoint_definitions["groups"]:
-        environment_group_id = group["id"]
+    with ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as executor:
 
-        for environment in group["environments"]:
-            environment_id = environment["id"]
+        for group in endpoint_definitions["groups"]:
+            environment_group_id = group["id"]
 
-            for endpoint_group in environment["endpoint-groups"]:
-                endpoint_group_id = endpoint_group["id"]
-                endpoint_group_enabled = endpoint_group["enabled"]
+            for environment in group["environments"]:
+                environment_id = environment["id"]
 
-                if endpoint_group_enabled == "true":
-                    for endpoint in endpoint_group["endpoints"]:
-                        endpoint_id = endpoint["id"]
-                        endpoint_url = endpoint["url"]
+                for endpoint_group in environment["endpoint-groups"]:
+                    endpoint_group_id = endpoint_group["id"]
+                    endpoint_group_enabled = endpoint_group["enabled"]
 
-                        endpoint_expected = ""
-                        if "expected" in endpoint:
-                            endpoint_expected = endpoint["expected"]
+                    if endpoint_group_enabled == "true":
+                        for endpoint in endpoint_group["endpoints"]:
+                            endpoint_id = endpoint["id"]
+                            endpoint_url = endpoint["url"]
 
-                        endpoint_threshold = None
-                        if "threshold" in endpoint:
-                            endpoint_threshold = Threshold(endpoint["threshold"])
+                            endpoint_expected = ""
+                            if "expected" in endpoint:
+                                endpoint_expected = endpoint["expected"]
 
-                        endpoint_model = Endpoint(
-                            environment_group = environment_group_id,
-                            environment = environment_id,
-                            endpoint_group = endpoint_group_id,
-                            endpoint = endpoint_id,
-                            url = endpoint_url
-                        )
+                            endpoint_threshold = None
+                            if "threshold" in endpoint:
+                                endpoint_threshold = Threshold(endpoint["threshold"])
 
-                        metrics_groups = get_endpoint_default(
-                            model=endpoint_model,
-                            property="metrics-groups",
-                            default_value=["default"]
-                        )
+                            endpoint_model = Endpoint(
+                                environment_group = environment_group_id,
+                                environment = environment_id,
+                                endpoint_group = endpoint_group_id,
+                                endpoint = endpoint_id,
+                                url = endpoint_url
+                            )
 
-                        result = test_endpoint(
-                            endpoint=endpoint_model,
-                            expected=endpoint_expected,
-                            threshold=endpoint_threshold,
-                            metrics_groups=metrics_groups
-                        )
+                            metrics_groups = get_endpoint_default(
+                                model=endpoint_model,
+                                property="metrics-groups",
+                                default_value=["default"]
+                            )
 
-                        incident = Incident(
-                            timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
-                            endpoint=endpoint_model,
-                            result=result,
-                            expected=endpoint_expected
-                        )
+                            alert_groups = get_endpoint_default(
+                                model=endpoint_model,
+                                property="alert-groups",
+                                default_value=get_alerts_in_group("default", alert_definitions)
+                            )
 
-                        alert_groups = get_endpoint_default(
-                            model=endpoint_model,
-                            property="alert-groups",
-                            default_value=get_alerts_in_group("default", alert_definitions)
-                        )
+                            executor.submit(run_test, endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold)
 
-                        handle_result(
-                            incident=incident,
-                            alert_groups=alert_groups
-                        )
 
-                        if not lifecycle_continues():
-                            return
+def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold):
+    attempt = 0
+    keep_trying = True
+    while keep_trying:
+        result = test_endpoint(
+            endpoint=endpoint_model,
+            expected=endpoint_expected,
+            threshold=endpoint_threshold,
+            metrics_groups=metrics_groups
+        )
+        if not result["result"] and result["message"] == "TIMEOUT":
+            attempt = attempt + 1
+            if attempt <= 3:
+                logger.info("re-testing timed out endpoint ({}) (attempt {} failed)".format(endpoint_model.url, attempt))
+                keep_trying = True
+                continue
+        break
+
+    incident = Incident(
+        timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
+        endpoint=endpoint_model,
+        result=result,
+        expected=endpoint_expected
+    )
+
+    handle_result(
+        incident=incident,
+        alert_groups=alert_groups
+    )
 
 
 def get_endpoint_default(model, property, default_value):
