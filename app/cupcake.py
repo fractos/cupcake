@@ -203,6 +203,7 @@ def endpoints_check():
 def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold):
     attempt = 0
     keep_trying = True
+    incident_timestamp = datetime.now(timezone.utc).astimezone().isoformat()
     while keep_trying:
         result = test_endpoint(
             endpoint=endpoint_model,
@@ -219,7 +220,7 @@ def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, en
         break
 
     incident = Incident(
-        timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
+        timestamp=incident_timestamp,
         endpoint=endpoint_model,
         result=result,
         expected=endpoint_expected
