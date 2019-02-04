@@ -290,7 +290,9 @@ def test_endpoint(endpoint, expected, threshold, metrics_groups):
                     host=parse_result.netloc,
                     timeout=settings.CONNECTION_TIMEOUT)
 
-            conn.request("GET", parse_result.path)
+            request_path = "{}{}".format(parse_result.path, "?{}".format(parse_result.query) if len(parse_result.query) > 0 else "")
+            logger.debug("request path: {}".format(request_path))
+            conn.request("GET", request_path)
             http_response = conn.getresponse()
             status = str(http_response.status)
             logger.debug("status: {}, expected: {}".format(status, expected))
