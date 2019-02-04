@@ -15,6 +15,7 @@ SUMMARY_ENABLED = bool(distutils.util.strtobool(os.getenv("SUMMARY_ENABLED")))
 SUMMARY_SLEEP_SECONDS = int(os.getenv("SUMMARY_SLEEP_SECONDS"))
 METRICS_DEFINITIONS_FILE = os.getenv("METRICS_DEFINITIONS_FILE")
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", default="2"))
+SHOW_BODY_IN_DEBUG_ON_UNEXPECTED_STATUS = bool(distutils.util.strtobool(os.getenv("SHOW_BODY_IN_DEBUG_ON_UNEXPECTED_STATUS", "False")))
 
 def get_database():
   if DB_TYPE == "postgresql":

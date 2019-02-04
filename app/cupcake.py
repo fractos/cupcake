@@ -291,7 +291,8 @@ def test_endpoint(endpoint, expected, threshold, metrics_groups):
                     timeout=settings.CONNECTION_TIMEOUT)
 
             conn.request("GET", parse_result.path)
-            status = str(conn.getresponse().status)
+            http_response = conn.getresponse()
+            status = str(http_response.status)
             logger.debug("status: {}, expected: {}".format(status, expected))
             if re.match(expected, status):
                 # result was good but now check if timing was beyond threshold
@@ -330,6 +331,10 @@ def test_endpoint(endpoint, expected, threshold, metrics_groups):
                 response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
                 metrics_groups=metrics_groups
             )
+
+            if settings.SHOW_BODY_IN_DEBUG_ON_UNEXPECTED_STATUS:
+                body = http_response.read()
+                logger.debug("body for {} was {}", endpoint.url, body)
 
             return {
                 "result": False,
