@@ -472,17 +472,17 @@ def handle_result(incident, alert_groups):
     ))
 
     if "actual" in incident.result:
-        logger.info("actual: {}".format(incident.result["actual"]))
+        logger.info("actual for {}: {}".format(incident.endpoint.url, incident.result["actual"]))
 
     if "threshold" in incident.result:
-        logger.info("threshold: {}".format(incident.result["threshold"]))
+        logger.info("threshold for {}: {}".format(incident.endpoint.url, incident.result["threshold"]))
 
     if db.active_exists(incident):
         # there's an existing alert for this tuple
         active = db.get_active(incident)
         if incident.result["result"]:
             # existing alert cleared
-            logger.info("cleared alert")
+            logger.info("cleared alert for {}".format(incident.endpoint.url))
 
             delta = relativedelta(seconds=time.time()-active["timestamp"])
             incident.message = "{} now OK after {}\n".format(
