@@ -59,7 +59,7 @@ class SqliteDatabase(Database):
             data = cur.fetchone()
             return data
         except sqlite3.Error as e:
-            logger.error("sqlite_database: problem during active_exists() - %s" % str(e))
+            logger.error("sqlite_database: problem during get_active() - %s" % str(e))
         finally:
             if con:
                 con.close()
@@ -75,7 +75,7 @@ class SqliteDatabase(Database):
             data = cur.fetchall()
             return data
         except sqlite3.Error as e:
-            logger.error("sqlite_database: problem during get_active_alerts() - %s" % str(e))
+            logger.error("sqlite_database: problem during get_all_actives() - %s" % str(e))
             return None
         finally:
             if con:
