@@ -125,7 +125,7 @@ def emit_summary():
     actives_message = ""
 
     for active in actives:
-        actives_message = actives_message + "{}\n".format(active["message"])
+        actives_message = actives_message + "{} since {}\n".format(active["message"], datetime.utcfromtimestamp(active["timestamp"]).strftime('%Y-%m-%d %H:%M:%S'))
 
     if len(actives) == 0:
         message = message + "\n\nCupcake is not currently aware of any alerts."

@@ -58,7 +58,7 @@ class PostgreSqlDatabase(Database):
             data = cur.fetchone()
             return data
         except psycopg2.Error as e:
-            logger.error("postgresql_database: problem during active_exists() - %s" % str(e))
+            logger.error("postgresql_database: problem during get_active() - %s" % str(e))
         finally:
             if con:
                 con.close()
@@ -73,7 +73,7 @@ class PostgreSqlDatabase(Database):
             data = cur.fetchall()
             return data
         except psycopg2.Error as e:
-            logger.error("postgresql_database: problem during get_active_alerts() - %s" % str(e))
+            logger.error("postgresql_database: problem during get_all_actives() - %s" % str(e))
             return None
         finally:
             if con:
