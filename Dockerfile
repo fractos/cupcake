@@ -4,7 +4,8 @@ RUN apk add --update --no-cache --virtual=run-deps \
   python3 \
   ca-certificates \
   py3-psycopg2 \
-  vim
+  vim \
+  && rm -rf /var/cache/apk/*
 
 ENV SLEEP_SECONDS 60
 ENV ENDPOINT_DEFINITIONS_FILE /opt/app/config/endpoints.json
