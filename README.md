@@ -1,6 +1,7 @@
 # Cupcake
 
 [![Build Status](https://travis-ci.org/fractos/cupcake.svg?branch=master)](https://travis-ci.org/fractos/cupcake)
+[![Docker Pulls](https://img.shields.io/docker/pulls/fractos/cupcake.svg?style=for-the-badge)](https://hub.docker.com/r/fractos/cupcake/)
 
 ## Table of Contents
 <!-- TOC orderedList:false -->
