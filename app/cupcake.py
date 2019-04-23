@@ -170,7 +170,7 @@ def endpoints_check():
                             endpoint_id = endpoint["id"]
                             endpoint_url = endpoint["url"]
 
-                            if "appendTraceID" in endpoint:
+                            if "appendTraceID" in endpoint and endpoint["appendTraceID"]:
                                 endpoint_url = create_or_append_query_string(
                                     original=endpoint_url,
                                     argument="{}={}".format(endpoint["traceArgumentKey"], get_trace_id())
