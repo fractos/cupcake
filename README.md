@@ -93,7 +93,11 @@ This gives a great deal of flexibility and range for defining collections of end
 
 ### Example
 
-The following defines an environment group called "customer ABC" which has an environment called "production". Within that environment are two endpoint groups - "external" and "internal". The "external" endpoint group contains an HTTPS URL for the main website including a regular expression that defines the HTTP status code that it expects to receive (any status code in range 2xx). The "internal" endpoint group contains a TCP URL for a Redis server. It is assumed for this example that Cupcake is situated on a server that is inside the private network and therefore is able to lookup a host named "redis.internal" using some kind of internal DNS scheme (e.g. Route53).
+The following defines an environment group called "customer ABC" which has an environment called "production". Within that environment are two endpoint groups - "external" and "internal".
+
+The "external" endpoint group contains an HTTPS URL for a website and a regular expression that defines the HTTP status code that it expects to receive (any status code in range 2xx). An optional GUID will be added to the URL query string with the key `cupcake_trace_id`. The URL including the TraceID will be emitted in any alert incident that occurs allowing this to be located in server access logs.
+
+The "internal" endpoint group contains a TCP URL for a Redis server. It is assumed for this example that Cupcake is situated on a server that is inside the private network and therefore is able to lookup a host named "redis.internal" using some kind of internal DNS scheme (e.g. Route53).
 
 The website endpoint also defines a threshold for the response timing where anything greater than 200 milliseconds will cause an incident to be raised.
 
@@ -124,7 +128,9 @@ The website endpoint also defines a threshold for the response timing where anyt
                   "threshold": {
                     "min": 0,
                     "max": 200
-                  }
+                  },
+                  "appendTraceID": true,
+                  "traceArgumentKey": "cupcake_trace_id"
                 }
               ]
             },
@@ -175,7 +181,7 @@ The `default` group contains the IDs of alerts that should receive incident noti
       "@type": "alert-group",
       "id": "summary",
       "alerts": [
-        "slack-cupcake-webhook"
+        "my-slack-channel"
       ]
     },
     {

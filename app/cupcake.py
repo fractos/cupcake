@@ -171,9 +171,17 @@ def endpoints_check():
                             endpoint_url = endpoint["url"]
 
                             if "appendTraceID" in endpoint and endpoint["appendTraceID"]:
+
+                                # default argument key
+                                trace_argument_key = "cupcake_trace_id"
+
+                                # use custom key if provided
+                                if "traceArgumentKey" in endpoint:
+                                    trace_argument_key = endpoint["traceArgumentKey"]
+
                                 endpoint_url = create_or_append_query_string(
                                     original=endpoint_url,
-                                    argument="{}={}".format(endpoint["traceArgumentKey"], get_trace_id())
+                                    argument="{}={}".format(trace_argument_key, get_trace_id())
                                 )
 
                             endpoint_expected = ""
