@@ -14,6 +14,7 @@ import requests
 import signal
 import os
 import boto3
+import uuid
 from models import Incident, Threshold, Metric, Endpoint
 from alerts import deliver_alert_to_groups, deliver_alert_to_group, get_alerts_in_group
 from metrics import deliver_metric_to_groups, get_metrics_in_group
@@ -169,6 +170,12 @@ def endpoints_check():
                             endpoint_id = endpoint["id"]
                             endpoint_url = endpoint["url"]
 
+                            if "appendTraceID" in endpoint:
+                                endpoint_url = create_or_append_query_string(
+                                    original=endpoint_url,
+                                    argument="{}={}".format(endpoint["traceArgumentKey"], get_trace_id())
+                                )
+
                             endpoint_expected = ""
                             if "expected" in endpoint:
                                 endpoint_expected = endpoint["expected"]
@@ -198,6 +205,17 @@ def endpoints_check():
                             )
 
                             executor.submit(run_test, endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold)
+
+
+def get_trace_id():
+    return str(uuid.uuid4())
+
+
+def create_or_append_query_string(original, argument):
+    if "?" in original:
+        return "{}&{}".format(original, argument)
+    # else...
+    return "{}?{}".format(original, argument)
 
 
 def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold):
