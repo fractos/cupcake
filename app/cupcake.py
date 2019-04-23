@@ -571,10 +571,10 @@ def handle_result(incident, alert_groups):
                         incident.result["message"]
                     )
 
-                incident.message = "{}\n({})".format(
-                    incident.message,
-                    incident.endpoint.url
-                )
+                # incident.message = "{}\n({})".format(
+                #     incident.message,
+                #     incident.endpoint.url
+                # )
 
             db.save_active(incident)
 
