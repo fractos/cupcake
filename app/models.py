@@ -85,7 +85,7 @@ class Endpoint:
 
 
     def __repr__(self):
-        return "{} {} {} {} ({})".format(
+        return "{} {} {} {} {}".format(
             self.environment_group,
             self.environment,
             self.endpoint_group,
