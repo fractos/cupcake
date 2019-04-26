@@ -184,6 +184,20 @@ def endpoints_check():
                                     argument="{}={}".format(trace_argument_key, get_trace_id())
                                 )
 
+                            if "appendAttempt" in endpoint and endpoint["appendAttempt"]:
+
+                                # default argument key
+                                append_attempt_key = "cupcake_attempt"
+
+                                # use custom key if provided
+                                if "attemptArgumentKey" in endpoint:
+                                    append_attempt_key = endpoint["attemptArgumentKey"]
+
+                                endpoint_url = create_or_append_query_string(
+                                    original=endpoint_url,
+                                    argument="{}=##CUPCAKE_ATTEMPT##".format(append_attempt_key)
+                                )
+
                             endpoint_expected = ""
                             if "expected" in endpoint:
                                 endpoint_expected = endpoint["expected"]
@@ -230,7 +244,12 @@ def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, en
     attempt = 0
     keep_trying = True
     incident_timestamp = datetime.now(timezone.utc).astimezone().isoformat()
+    original_endpoint_url = endpoint_model.url
     while keep_trying:
+
+        if "##CUPCAKE_ATTEMPT##" in original_endpoint_url:
+            endpoint_model.url = original_endpoint_url.replace("##CUPCAKE_ATTEMPT##", str(attempt + 1))
+
         result = test_endpoint(
             endpoint=endpoint_model,
             expected=endpoint_expected,
