@@ -2,3 +2,4 @@ logzero
 requests
 python-dateutil
 boto3
+slackclient

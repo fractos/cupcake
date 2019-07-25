@@ -15,6 +15,7 @@ import signal
 import os
 import boto3
 import uuid
+from slackclient import SlackClient
 from models import Incident, Threshold, Metric, Endpoint
 from alerts import deliver_alert_to_groups, deliver_alert_to_group, get_alerts_in_group
 from metrics import deliver_metric_to_groups, get_metrics_in_group
@@ -28,6 +29,10 @@ alert_definitions = None
 metrics_definitions = None
 db = None
 
+slack_client = None
+slack_bot_id = None
+slack_mention_regex = "^<@(|[WU].+?)>(.*)"
+
 def main():
     logger.info("starting...")
 
@@ -36,6 +41,8 @@ def main():
     global db
     db = settings.get_database()
 
+    setup_slack_client()
+
     while lifecycle_continues():
         lifecycle()
 
@@ -43,6 +50,7 @@ def main():
             logger.info("sleeping for %s seconds..." % settings.SLEEP_SECONDS)
             for _ in range(settings.SLEEP_SECONDS):
                 if lifecycle_continues():
+                    slack_command_check()
                     time.sleep(1)
 
 
@@ -62,6 +70,23 @@ def setup_signal_handling():
     signal.signal(signal.SIGINT, signal_handler)
 
 
+def setup_slack_client():
+    global slack_client
+    global slack_bot_id
+
+    if settings.SLACK_BOT_TOKEN is None:
+        return
+
+    logger.info("setting up slack client")
+    slack_client = SlackClient(settings.SLACK_BOT_TOKEN)
+    if slack_client.rtm_connect(with_team_state=False):
+        slack_bot_id = slack_client.api_call("auth.test")["user_id"]
+        if slack_bot_id:
+            logger.info("slack client connected")
+        else:
+            logger.info("slack client could not connect")
+
+
 def get_file_or_s3(uri):
     logger.info("getting file URI %s" % uri)
 
@@ -72,6 +97,27 @@ def get_file_or_s3(uri):
         return s3_object.get()["Body"].read().decode("utf-8")
 
     return open(uri).read()
+
+
+def slack_parse_direct_mention(message_text):
+    matches = re.search(slack_mention_regex, message_text)
+    return (matches.group(1), matches.group(2).strip()) if matches else (None, None)
+
+
+def slack_parse_command(slack_events):
+    for event in slack_events:
+        if event["type"] == "message" and not "subtype" in event:
+            user_id, message = slack_parse_direct_mention(event["text"])
+            if user_id == slack_bot_id:
+                return message, event["channel"]
+
+
+def slack_command_check():
+    command, channel = slack_parse_command(slack_client.rtm_read())
+    if command:
+        logger.info(f"slack received {command}")
+        if command == "status":
+            emit_summary()
 
 
 def lifecycle():
