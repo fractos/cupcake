@@ -22,7 +22,7 @@
 
 This is a very simple HTTP, HTTPS and TCP endpoint monitor intended to be the simplest thing that works.
 
-It will work through a file that defines groups of environments and endpoints, currently as a single thread.
+It will work through a file that defines groups of environments and endpoints.
 
 If an endpoint times out for connection or if an HTTP/HTTPS endpoint returns a different status code than is expected, then an alert is processed. Cupcake records previous alerts in a backing database and therefore will only alert once for a failure, but will note a return to service for an endpoint together with an approximate length of time that the outage occurred for.
 
