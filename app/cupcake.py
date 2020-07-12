@@ -15,7 +15,7 @@ import signal
 import os
 import boto3
 import uuid
-from slackclient import SlackClient
+from slack import WebClient
 from models import Incident, Threshold, Metric, Endpoint
 from alerts import deliver_alert_to_groups, deliver_alert_to_group, get_alerts_in_group
 from metrics import deliver_metric_to_groups, get_metrics_in_group
@@ -78,8 +78,13 @@ def setup_slack_client():
         return
 
     logger.info("setting up slack client")
-    slack_client = SlackClient(settings.SLACK_BOT_TOKEN)
-    if slack_client.rtm_connect(with_team_state=False):
+    slack_client = RTMClient(token=settings.SLACK_BOT_TOKEN)
+    slack_client.start()
+
+
+def slack_handle_command(**payload):
+
+    if slack_client.rtm_connect():
         slack_bot_id = slack_client.api_call("auth.test")["user_id"]
         if slack_bot_id:
             logger.info("slack client connected")
@@ -113,6 +118,9 @@ def slack_parse_command(slack_events):
 
 
 def slack_command_check():
+    if settings.SLACK_BOT_TOKEN is None:
+        return
+
     command, channel = slack_parse_command(slack_client.rtm_read())
     if command:
         logger.info(f"slack received {command}")
