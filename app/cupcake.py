@@ -120,7 +120,12 @@ def emit_summary():
                     for _ in endpoint_group["endpoints"]:
                         number_of_endpoints = number_of_endpoints + 1
 
-    message = "Cupcake is alive and currently monitoring {} endpoints.".format(number_of_endpoints)
+    endpoint_plural = "s"
+
+    if number_of_endpoints == 1:
+        endpoint_plural = ""
+
+    message = "Cupcake is alive and currently monitoring {} endpoint{}.".format(number_of_endpoints, endpoint_plural)
 
     actives = db.get_all_actives()
     actives_message = ""
