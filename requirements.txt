@@ -1,4 +1,4 @@
 logzero
-requests
+flask
 python-dateutil
 boto3
