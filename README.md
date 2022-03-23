@@ -41,11 +41,12 @@ If the environment variable `SUMMARY_ENABLED` is "True", Cupcake will emit a sum
 | SLEEP_SECONDS              | Number of seconds to yield between runs                                  | 60                             |
 | ENDPOINT_DEFINITIONS_FILE  | Full path or S3 URL of endpoint definitions file                         | /opt/app/config/endpoints.json |
 | ALERT_DEFINITIONS_FILE     | Full path or S3 URL of alert definitions file                            | /opt/app/config/alerts.json    |
-| METRICS_DEFINITIONS_FILE   | Full path or S3 URL of metrics defintions file                           | /opt/app/config/metrics.json   |
+| METRICS_DEFINITIONS_FILE   | Full path or S3 URL of metrics definitions file                          | /opt/app/config/metrics.json   |
 | CONNECTION_TIMEOUT_SECONDS | Number of seconds before HTTP(S) and TCP connections will timeout        | 10                             |
 | DB_TYPE                    | Type of database to use. Possible values: `sqlite` or `postgresql`       | sqlite                         |
 | SUMMARY_ENABLED            | Whether to emit a summary / digest message to a subset of alert channels | True                           |
 | SUMMARY_SLEEP_SECONDS      | Number of seconds between emitting summary digests                       | 86400                          |
+| REMOVE_UNKNOWN_ACTIVES     | Whether to delete active alerts that are no longer present in alert defs | False                          |
 
 Note:
 

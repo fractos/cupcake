@@ -113,11 +113,18 @@ def emit_summary():
 
     number_of_endpoints = 0
 
+    # build a list of monitored results, for ease of validating actives
+    monitored = []
+
     for group in endpoint_definitions["groups"]:
         for environment in group["environments"]:
             for endpoint_group in environment["endpoint-groups"]:
-                if endpoint_group["enabled"] == "true":
-                    for _ in endpoint_group["endpoints"]:
+                for endpoint in endpoint_group["endpoints"]:
+                    endpoint_group_enabled = endpoint_group["enabled"]
+                    monitor_id = get_monitor_identifier(group["id"], environment["id"], endpoint_group["id"],
+                                                        endpoint["id"], endpoint_group_enabled)
+                    monitored.append(monitor_id)
+                    if endpoint_group_enabled == "true":
                         number_of_endpoints = number_of_endpoints + 1
 
     endpoint_plural = "s"
@@ -127,16 +134,7 @@ def emit_summary():
 
     message = "Cupcake is alive and currently monitoring {} endpoint{}.".format(number_of_endpoints, endpoint_plural)
 
-    actives = db.get_all_actives()
-    actives_message = ""
-
-    for active in actives:
-        actives_message = actives_message + "{} since {}\n".format(active["message"], datetime.utcfromtimestamp(active["timestamp"]).strftime('%Y-%m-%d %H:%M:%S'))
-
-    if len(actives) == 0:
-        message = message + "\n\nCupcake is not currently aware of any alerts."
-    else:
-        message = message + "\n\nCupcake is aware of the following alerts:\n%s" % actives_message
+    message = process_active_alerts(db, monitored, message)
 
     deliver_alert_to_group(
         incident=Incident(
@@ -146,6 +144,49 @@ def emit_summary():
         alert_group_id="summary",
         alert_definitions=alert_definitions
     )
+
+
+def process_active_alerts(db, monitored, message):
+    actives = db.get_all_actives()
+    actives_message = ""
+    for active in actives:
+        display_time = datetime.utcfromtimestamp(active["timestamp"]).strftime('%Y-%m-%d %H:%M:%S')
+
+        environment_group_id = active["environment_group"]
+        environment_id = active["environment"]
+        endpoint_group_id = active["endpoint_group"]
+        endpoint_id = active["endpoint"]
+        monitor_id = get_monitor_identifier(environment_group_id, environment_id, endpoint_group_id, endpoint_id,
+                                            "true")
+
+        if not settings.REMOVE_UNKNOWN_ACTIVES or monitor_id in monitored:
+            actives_message = actives_message + "{} since {}\n".format(active["message"], display_time)
+        else:
+            logger.info("removing active alert as not in alert definition: {}".format(monitor_id))
+            actives_message = actives_message + "removing alert: {} since {}\n".format(active["message"], display_time)
+            endpoint_model = Endpoint(
+                environment_group=environment_group_id,
+                environment=environment_id,
+                endpoint_group=endpoint_group_id,
+                endpoint=endpoint_id,
+                url=active["url"]
+            )
+
+            incident = Incident(
+                timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
+                endpoint=endpoint_model
+            )
+            db.remove_active(incident)
+
+    if len(actives) == 0:
+        message = message + "\n\nCupcake is not currently aware of any alerts."
+    else:
+        message = message + "\n\nCupcake is aware of the following alerts:\n%s" % actives_message
+    return message
+
+
+def get_monitor_identifier(environment_group, environment, endpoint_group, endpoint, active):
+    return "%s|%s|%s|%s|%s" % (environment_group, environment, endpoint_group, endpoint, active)
 
 
 def endpoints_check():
