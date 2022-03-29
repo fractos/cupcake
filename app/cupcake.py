@@ -217,13 +217,7 @@ def endpoints_check():
                             endpoint_url = endpoint["url"]
 
                             if "appendTraceID" in endpoint and endpoint["appendTraceID"]:
-
-                                # default argument key
-                                trace_argument_key = "cupcake_trace_id"
-
-                                # use custom key if provided
-                                if "traceArgumentKey" in endpoint:
-                                    trace_argument_key = endpoint["traceArgumentKey"]
+                                trace_argument_key = endpoint.get("traceArgumentKey", "cupcake_trace_id")
 
                                 endpoint_url = create_or_append_query_string(
                                     original=endpoint_url,
@@ -231,33 +225,29 @@ def endpoints_check():
                                 )
 
                             if "appendAttempt" in endpoint and endpoint["appendAttempt"]:
-
-                                # default argument key
-                                append_attempt_key = "cupcake_attempt"
-
-                                # use custom key if provided
-                                if "attemptArgumentKey" in endpoint:
-                                    append_attempt_key = endpoint["attemptArgumentKey"]
+                                # have default argument key, use custom key if provided
+                                append_attempt_key = endpoint.get("attemptArgumentKey", "cupcake_attempt")
 
                                 endpoint_url = create_or_append_query_string(
                                     original=endpoint_url,
                                     argument="{}=##CUPCAKE_ATTEMPT##".format(append_attempt_key)
                                 )
 
-                            endpoint_expected = ""
-                            if "expected" in endpoint:
-                                endpoint_expected = endpoint["expected"]
+                            endpoint_expected = endpoint.get("expected", "")
 
                             endpoint_threshold = None
                             if "threshold" in endpoint:
                                 endpoint_threshold = Threshold(endpoint["threshold"])
 
+                            retry = endpoint.get("retry", 0)
+
                             endpoint_model = Endpoint(
-                                environment_group = environment_group_id,
-                                environment = environment_id,
-                                endpoint_group = endpoint_group_id,
-                                endpoint = endpoint_id,
-                                url = endpoint_url
+                                environment_group=environment_group_id,
+                                environment=environment_id,
+                                endpoint_group=endpoint_group_id,
+                                endpoint=endpoint_id,
+                                url=endpoint_url,
+                                retry=retry
                             )
 
                             metrics_groups = get_endpoint_default(
@@ -272,7 +262,8 @@ def endpoints_check():
                                 default_value=get_alerts_in_group("default", alert_definitions)
                             )
 
-                            executor.submit(run_test, endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold)
+                            executor.submit(run_test, endpoint_model, metrics_groups, alert_groups, endpoint_expected,
+                                            endpoint_threshold)
 
 
 def get_trace_id():
