@@ -293,10 +293,13 @@ def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, en
             threshold=endpoint_threshold,
             metrics_groups=metrics_groups
         )
-        if not result["result"] and result["message"] == "TIMEOUT":
+
+        # Retry TIMEOUTs 3 times but only if not already retried via endpoint config
+        if not result["result"] and result["message"] == "TIMEOUT" and not result.get("retried", False):
             attempt = attempt + 1
             if attempt <= 3:
-                logger.info("re-testing timed out endpoint ({}) (attempt {} failed)".format(endpoint_model.url, attempt))
+                logger.info(
+                    f"re-testing timed out endpoint ({endpoint_model}) (attempt {attempt} failed)")
                 keep_trying = True
                 continue
         break
