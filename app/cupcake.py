@@ -350,86 +350,106 @@ def get_child_by_property(parent, property, target):
 def test_endpoint(endpoint, expected, threshold, metrics_groups):
     global metrics_definitions
 
-    logger.info("testing endpoint {}".format(endpoint.url))
+    logger.info(f"testing endpoint {endpoint.url}")
     if not lifecycle_continues():
         logger.info("test_endpoint: bailing")
         return False
 
     parse_result = urlparse(endpoint.url)
 
+    count = 0
+    result = {}
+
+    while count <= endpoint.retry:
+        count += 1
+        if parse_result.scheme == "http" or parse_result.scheme == "https":
+            result = http_check(parse_result, endpoint, expected, threshold, metrics_groups)
+        elif parse_result.scheme == "tcp":
+            result = tcp_check(parse_result, endpoint, threshold, metrics_groups)
+
+        if result.get("result", False):
+            break
+
+    if count > 1:
+        result["retried"] = True
+
+    return result
+
+
+def http_check(parse_result, endpoint, expected, threshold, metrics_groups):
     start_time = time.time()
-    test_time = None
+    try:
+        conn = None
 
-    if parse_result.scheme == "http" or parse_result.scheme == "https":
-        try:
-            conn = None
+        if parse_result.scheme == "http":
+            conn = http.client.HTTPConnection(
+                host=parse_result.netloc,
+                timeout=settings.CONNECTION_TIMEOUT)
+        else:
+            conn = http.client.HTTPSConnection(
+                host=parse_result.netloc,
+                timeout=settings.CONNECTION_TIMEOUT)
 
-            if parse_result.scheme == "http":
-                conn = http.client.HTTPConnection(
-                    host=parse_result.netloc,
-                    timeout=settings.CONNECTION_TIMEOUT)
-            else:
-                conn = http.client.HTTPSConnection(
-                    host=parse_result.netloc,
-                    timeout=settings.CONNECTION_TIMEOUT)
+        request_path = "{}{}".format(parse_result.path,
+                                     "?{}".format(parse_result.query) if len(parse_result.query) > 0 else "")
+        logger.debug(f"request path: {request_path}")
+        conn.request("GET", request_path)
+        http_response = conn.getresponse()
+        status = str(http_response.status)
+        logger.debug(f"status: {status}, expected: {expected}")
+        if re.match(expected, status):
+            # result was good but now check if timing was beyond threshold
+            return threshold_check(start_time, endpoint, metrics_groups, threshold)
 
-            request_path = "{}{}".format(parse_result.path, "?{}".format(parse_result.query) if len(parse_result.query) > 0 else "")
-            logger.debug("request path: {}".format(request_path))
-            conn.request("GET", request_path)
-            http_response = conn.getresponse()
-            status = str(http_response.status)
-            logger.debug("status: {}, expected: {}".format(status, expected))
-            if re.match(expected, status):
-                # result was good but now check if timing was beyond threshold
-                test_time = get_relative_time(start_time, time.time())
-                logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
+        test_time = get_relative_time(start_time, time.time())
+        response_time = int(round(getattr(test_time, "microsecond") / 1000.0))
+        logger.debug(f"response time was {response_time}ms")
 
-                metrics_record_response_time(
-                    endpoint=endpoint,
-                    timestamp=time.time(),
-                    response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
-                    metrics_groups=metrics_groups
-                )
+        metrics_record_response_time(
+            endpoint=endpoint,
+            timestamp=time.time(),
+            response_time=response_time,
+            metrics_groups=metrics_groups
+        )
 
-                threshold_result = None
-                if threshold is not None:
-                    threshold_result = threshold.result(test_time)
+        if settings.SHOW_BODY_IN_DEBUG_ON_UNEXPECTED_STATUS:
+            body = http_response.read()
+            logger.debug(f"body for {endpoint.url} was {body}")
 
-                if threshold_result is None or threshold_result.okay:
-                    return {
-                        "result": True,
-                        "message": "OK"
-                    }
+        return {
+            "result": False,
+            "actual": status,
+            "message": "BAD"
+        }
 
-                return {
-                    "result": False,
-                    "message": "BAD",
-                    "threshold": threshold_result.result
-                }
+    except Exception as e:
+        logger.debug(f"error during testing: {str(e)}")
+        pass
 
-            test_time = get_relative_time(start_time, time.time())
-            logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
+    test_time = get_relative_time(start_time, time.time())
 
-            metrics_record_response_time(
-                endpoint=endpoint,
-                timestamp=time.time(),
-                response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
-                metrics_groups=metrics_groups
-            )
+    metrics_record_response_time(
+        endpoint=endpoint,
+        timestamp=time.time(),
+        response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
+        metrics_groups=metrics_groups
+    )
 
-            if settings.SHOW_BODY_IN_DEBUG_ON_UNEXPECTED_STATUS:
-                body = http_response.read()
-                logger.debug("body for {} was {}", endpoint.url, body)
+    return {
+        "result": False,
+        "message": "TIMEOUT"
+    }
 
-            return {
-                "result": False,
-                "actual": status,
-                "message": "BAD"
-            }
 
-        except Exception as e:
-            logger.debug("error during testing: {}".format(str(e)))
-            pass
+def tcp_check(parse_result, endpoint, threshold, metrics_groups):
+    start_time = time.time()
+
+    s = socket.socket()
+    try:
+        s.settimeout(settings.CONNECTION_TIMEOUT)
+        s.connect((parse_result.hostname, parse_result.port))
+    except socket.timeout:
+        logger.info(f"tcp endpoint {parse_result.netloc} hit timeout")
 
         test_time = get_relative_time(start_time, time.time())
 
@@ -445,55 +465,9 @@ def test_endpoint(endpoint, expected, threshold, metrics_groups):
             "message": "TIMEOUT"
         }
 
-    elif parse_result.scheme == "tcp":
-        s = socket.socket()
-        try:
-            s.settimeout(settings.CONNECTION_TIMEOUT)
-            s.connect((parse_result.hostname, parse_result.port))
-        except socket.timeout:
-            logger.info(
-                "tcp endpoint {} hit timeout".format(parse_result.netloc)
-            )
+    except Exception as e:
 
-            test_time = get_relative_time(start_time, time.time())
-
-            metrics_record_response_time(
-                endpoint=endpoint,
-                timestamp=time.time(),
-                response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
-                metrics_groups=metrics_groups
-            )
-
-            return {
-                "result": False,
-                "message": "TIMEOUT"
-            }
-
-        except Exception as e:
-
-            test_time = get_relative_time(start_time, time.time())
-
-            metrics_record_response_time(
-                endpoint=endpoint,
-                timestamp=time.time(),
-                response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
-                metrics_groups=metrics_groups
-            )
-
-            logger.info(
-                "tcp endpoint {} had a problem: {}".format(parse_result.netloc, e)
-            )
-            return {
-                "result": False,
-                "message": "BAD"
-            }
-
-        finally:
-            s.close()
-        # result was good but now check if timing was beyond threshold
         test_time = get_relative_time(start_time, time.time())
-
-        logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
 
         metrics_record_response_time(
             endpoint=endpoint,
@@ -502,20 +476,46 @@ def test_endpoint(endpoint, expected, threshold, metrics_groups):
             metrics_groups=metrics_groups
         )
 
-        threshold_result = None
-        if threshold is not None:
-            threshold_result = threshold.result(test_time)
-
-        if threshold_result is None or threshold_result.okay:
-            return {
-                "result": True
-            }
-
+        logger.info(f"tcp endpoint {parse_result.netloc} had a problem: {e}")
         return {
             "result": False,
-            "message": "BAD",
-            "threshold": threshold_result.result
+            "message": "BAD"
         }
+
+    finally:
+        s.close()
+
+    # result was good but now check if timing was beyond threshold
+    return threshold_check(start_time, endpoint, metrics_groups, threshold)
+
+
+def threshold_check(start_time, endpoint, metrics_groups, threshold):
+    test_time = get_relative_time(start_time, time.time())
+    response_time = int(round(getattr(test_time, "microsecond") / 1000.0))
+    logger.debug(f"response time was {response_time}ms")
+
+    metrics_record_response_time(
+        endpoint=endpoint,
+        timestamp=time.time(),
+        response_time=response_time,
+        metrics_groups=metrics_groups
+    )
+
+    threshold_result = None
+    if threshold is not None:
+        threshold_result = threshold.result(test_time)
+
+    if threshold_result is None or threshold_result.okay:
+        return {
+            "result": True,
+            "message": "OK"
+        }
+
+    return {
+        "result": False,
+        "message": "BAD",
+        "threshold": threshold_result.result
+    }
 
 
 def metrics_record_response_time(endpoint, timestamp, response_time, metrics_groups):
