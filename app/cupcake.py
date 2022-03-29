@@ -10,14 +10,12 @@ import socket
 import http.client
 import json
 import time
-import requests
 import signal
-import os
 import boto3
 import uuid
 from models import Incident, Threshold, Metric, Endpoint
 from alerts import deliver_alert_to_groups, deliver_alert_to_group, get_alerts_in_group
-from metrics import deliver_metric_to_groups, get_metrics_in_group
+from metrics import deliver_metric_to_groups
 import settings
 
 requested_to_quit = False
@@ -27,6 +25,7 @@ endpoint_definitions = None
 alert_definitions = None
 metrics_definitions = None
 db = None
+
 
 def main():
     logger.info("starting...")
@@ -93,7 +92,7 @@ def lifecycle():
     )
 
     if settings.SUMMARY_ENABLED:
-        seconds=time.time()-last_summary_emitted
+        seconds = time.time() - last_summary_emitted
         if seconds >= settings.SUMMARY_SLEEP_SECONDS:
             last_summary_emitted = time.time()
             emit_summary()
@@ -132,7 +131,7 @@ def emit_summary():
     if number_of_endpoints == 1:
         endpoint_plural = ""
 
-    message = "Cupcake is alive and currently monitoring {} endpoint{}.".format(number_of_endpoints, endpoint_plural)
+    message = f"Cupcake is alive and currently monitoring {number_of_endpoints} endpoint{endpoint_plural}."
 
     message = process_active_alerts(db, monitored, message)
 
@@ -160,10 +159,10 @@ def process_active_alerts(db, monitored, message):
                                             "true")
 
         if not settings.REMOVE_UNKNOWN_ACTIVES or monitor_id in monitored:
-            actives_message = actives_message + "{} since {}\n".format(active["message"], display_time)
+            actives_message = f"{actives_message}{active['message']} since {display_time}\n"
         else:
-            logger.info("removing active alert as not in alert definition: {}".format(monitor_id))
-            actives_message = actives_message + "removing alert: {} since {}\n".format(active["message"], display_time)
+            logger.info(f"removing active alert as not in alert definition: {monitor_id}")
+            actives_message = f"{actives_message}removing alert: {active['message']} since {display_time}\n"
             endpoint_model = Endpoint(
                 environment_group=environment_group_id,
                 environment=environment_id,
@@ -181,7 +180,7 @@ def process_active_alerts(db, monitored, message):
     if len(actives) == 0:
         message = message + "\n\nCupcake is not currently aware of any alerts."
     else:
-        message = message + "\n\nCupcake is aware of the following alerts:\n%s" % actives_message
+        message = message + f"\n\nCupcake is aware of the following alerts:\n{actives_message}"
     return message
 
 
@@ -272,9 +271,9 @@ def get_trace_id():
 
 def create_or_append_query_string(original, argument):
     if "?" in original:
-        return "{}&{}".format(original, argument)
+        return f"{original}&{argument}"
     # else...
-    return "{}?{}".format(original, argument)
+    return f"{original}?{argument}"
 
 
 def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold):
@@ -538,7 +537,7 @@ def metrics_record_response_time(endpoint, timestamp, response_time, metrics_gro
 
 
 def get_relative_time(start_time, end_time):
-    return relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
+    return relativedelta(microsecond=int(round((end_time - start_time) * 1000000)))
 
 
 def handle_result(incident, alert_groups):
@@ -551,37 +550,35 @@ def handle_result(incident, alert_groups):
 
     attrs = ["years", "months", "days", "hours", "minutes", "seconds", "microsecond"]
     human_readable = lambda delta: ["%d %s" % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
-        for attr in attrs if getattr(delta, attr)]
+                                    for attr in attrs if getattr(delta, attr)]
 
-    logger.debug("result: timestamp: {}, environment_group: {} environment: {}, endpoint_group: {}, endpoint: {}, result: {}, url: {}, expected: {}".format(
-        incident.timestamp,
-        incident.endpoint.environment_group,
-        incident.endpoint.environment,
-        incident.endpoint.endpoint_group,
-        incident.endpoint.endpoint,
-        incident.result["result"],
-        incident.endpoint.url,
-        incident.expected
-    ))
+    logger.debug(
+        "result: timestamp: {}, environment_group: {} environment: {}, endpoint_group: {}, endpoint: {}, result: {}, url: {}, expected: {}".format(
+            incident.timestamp,
+            incident.endpoint.environment_group,
+            incident.endpoint.environment,
+            incident.endpoint.endpoint_group,
+            incident.endpoint.endpoint,
+            incident.result["result"],
+            incident.endpoint.url,
+            incident.expected
+        ))
 
     if "actual" in incident.result:
-        logger.info("actual for {}: {}".format(incident.endpoint.url, incident.result["actual"]))
+        logger.info(f"actual for {incident.endpoint.url}: {incident.result['actual']}")
 
     if "threshold" in incident.result:
-        logger.info("threshold for {}: {}".format(incident.endpoint.url, incident.result["threshold"]))
+        logger.info(f"threshold for {incident.endpoint.url}: {incident.result['threshold']}")
 
     if db.active_exists(incident):
         # there's an existing alert for this tuple
         active = db.get_active(incident)
         if incident.result["result"]:
             # existing alert cleared
-            logger.info("cleared alert for {}".format(incident.endpoint.url))
+            logger.info(f"cleared alert for {incident.endpoint.url}")
 
-            delta = relativedelta(seconds=time.time()-active["timestamp"])
-            incident.message = "{} now OK after {}\n".format(
-                repr(incident.endpoint),
-                ", ".join(human_readable(delta))
-            )
+            delta = relativedelta(seconds=time.time() - active["timestamp"])
+            incident.message = f"{repr(incident.endpoint)} now OK after {', '.join(human_readable(delta))}\n"
 
             db.remove_active(incident)
 
@@ -604,36 +601,16 @@ def handle_result(incident, alert_groups):
 
             if "threshold" in incident.result:
                 incident.presentation_message = "result was {}".format(incident.result["threshold"])
-                incident.message = "{} response {}".format(
-                    repr(incident.endpoint),
-                    incident.result["threshold"]
-                )
+                incident.message = f"{repr(incident.endpoint)} response {incident.result['threshold']}"
             else:
-                incident.presentation_message = "result was {}".format(incident.result["message"])
-                incident.message = "{} expected {}".format(
-                    repr(incident.endpoint),
-                    incident.expected
-                )
+                incident.presentation_message = f"result was {incident.result['message']}"
+                incident.message = f"{repr(incident.endpoint)} expected {incident.expected}"
 
                 if "actual" in incident.result:
-                    incident.presentation_message = "{}, actual: {}".format(
-                        incident.presentation_message,
-                        incident.result["actual"]
-                    )
-                    incident.message = "{}, actual: {}".format(
-                        incident.message,
-                        incident.result["actual"]
-                    )
+                    incident.presentation_message = f"{incident.presentation_message}, actual: {incident.result['actual']}"
+                    incident.message = f"{incident.message}, actual: {incident.result['actual']}"
                 else:
-                    incident.message = "{}, actual: {}".format(
-                        incident.message,
-                        incident.result["message"]
-                    )
-
-                # incident.message = "{}\n({})".format(
-                #     incident.message,
-                #     incident.endpoint.url
-                # )
+                    incident.message = f"{incident.message}, actual: {incident.result['message']}"
 
             db.save_active(incident)
 
