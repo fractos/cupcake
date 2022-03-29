@@ -4,19 +4,20 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/fractos/cupcake.svg?style=for-the-badge)](https://hub.docker.com/r/fractos/cupcake/)
 
 ## Table of Contents
+
 <!-- TOC orderedList:false -->
 
 - [Cupcake](#cupcake)
-  - [Table of Contents](#table-of-contents)
-  - [Environment variables](#environment-variables)
-  - [sqlite](#sqlite)
-  - [PostgreSQL](#postgresql)
-  - [Endpoint definition file](#endpoint-definition-file)
-    - [Example](#example)
-  - [Alert definition file](#alert-definition-file)
-    - [Example](#example-1)
-  - [Metrics definitions file](#metrics-definitions-file)
-    - [Example](#example-2)
+    - [Table of Contents](#table-of-contents)
+    - [Environment variables](#environment-variables)
+    - [sqlite](#sqlite)
+    - [PostgreSQL](#postgresql)
+    - [Endpoint definition file](#endpoint-definition-file)
+        - [Example](#example)
+    - [Alert definition file](#alert-definition-file)
+        - [Example](#example-1)
+    - [Metrics definitions file](#metrics-definitions-file)
+        - [Example](#example-2)
 
 <!-- /TOC -->
 
@@ -24,14 +25,19 @@ This is a very simple HTTP, HTTPS and TCP endpoint monitor intended to be the si
 
 It will work through a file that defines groups of environments and endpoints.
 
-If an endpoint times out for connection or if an HTTP/HTTPS endpoint returns a different status code than is expected, then an alert is processed. Cupcake records previous alerts in a backing database and therefore will only alert once for a failure, but will note a return to service for an endpoint together with an approximate length of time that the outage occurred for.
+If an endpoint times out for connection or if an HTTP/HTTPS endpoint returns a different status code than is expected,
+then an alert is processed. Cupcake records previous alerts in a backing database and therefore will only alert once for
+a failure, but will note a return to service for an endpoint together with an approximate length of time that the outage
+occurred for.
 
 Expected status codes for HTTP/HTTPS services is specified with a regular expression.
 
-At the moment Cupcake is able to emit alerts via a webhook URL such as the one used by Slack's custom webhook integration and also by sending a JSON blob to an SNS topic.
+At the moment Cupcake is able to emit alerts via a webhook URL such as the one used by Slack's custom webhook
+integration and also by sending a JSON blob to an SNS topic.
 
-If the environment variable `SUMMARY_ENABLED` is "True", Cupcake will emit a summary digest at startup and every `SUMMARY_SLEEP_SECONDS` afterwards to the alert group called `summary` (see [Alert definition file](#alert-definition-file), below).
-
+If the environment variable `SUMMARY_ENABLED` is "True", Cupcake will emit a summary digest at startup and
+every `SUMMARY_SLEEP_SECONDS` afterwards to the alert group called `summary` (
+see [Alert definition file](#alert-definition-file), below).
 
 ## Environment variables
 
@@ -50,11 +56,16 @@ If the environment variable `SUMMARY_ENABLED` is "True", Cupcake will emit a sum
 
 Note:
 
-It is important to have CONNECTION_TIMEOUT_SECONDS set to a value less than 30, as when a process in a containerised environment such as ECS is redeployed or stopped then it will be given a SIGTERM signal and a 30 second timeout before a SIGKILL signal is sent that will kill the process immediately. Cupcake tests whether it has been requested to stop after each endpoint measurement and intercepts SIGTERM and SIGINT in order to try and quit as soon as possible after receiving them.
+It is important to have CONNECTION_TIMEOUT_SECONDS set to a value less than 30, as when a process in a containerised
+environment such as ECS is redeployed or stopped then it will be given a SIGTERM signal and a 30 second timeout before a
+SIGKILL signal is sent that will kill the process immediately. Cupcake tests whether it has been requested to stop after
+each endpoint measurement and intercepts SIGTERM and SIGINT in order to try and quit as soon as possible after receiving
+them.
 
 ## sqlite
 
 To use sqlite as the backing database, set the following:
+
 ```
 DB_TYPE='sqlite'
 ```
@@ -66,6 +77,7 @@ DB_TYPE='sqlite'
 ## PostgreSQL
 
 To use PostgreSQL as the backing database, set the following:
+
 ```
 DB_TYPE='postgresql'
 ```
@@ -95,13 +107,23 @@ This gives a great deal of flexibility and range for defining collections of end
 
 ### Example
 
-The following defines an environment group called "customer ABC" which has an environment called "production". Within that environment are two endpoint groups - "external" and "internal".
+The following defines an environment group called "customer ABC" which has an environment called "production". Within
+that environment are two endpoint groups - "external" and "internal".
 
-The "external" endpoint group contains an HTTPS URL for a website and a regular expression that defines the HTTP status code that it expects to receive (any status code in range 2xx). An optional GUID will be added to the URL query string with the key `cupcake_trace_id` (which is the default). An optional attempt number will be added to the URL query string with the key `cupcake_attempt` (which is the default). The URL including the TraceID will be emitted in any alert incident that occurs allowing this to be located in server access logs.
+The "external" endpoint group contains an HTTPS URL for a website and a regular expression that defines the HTTP status
+code that it expects to receive (any status code in range 2xx). An optional GUID will be added to the URL query string
+with the key `cupcake_trace_id` (which is the default). An optional attempt number will be added to the URL query string
+with the key `cupcake_attempt` (which is the default). The URL including the TraceID will be emitted in any alert
+incident that occurs allowing this to be located in server access logs. `retry` signifies to retry this endpoint 2 times
+if failure encountered. By default all endpoints that fail due to a timeout are retried 3 times - the `retry` value 
+overrides that.
 
-The "internal" endpoint group contains a TCP URL for a Redis server. It is assumed for this example that Cupcake is situated on a server that is inside the private network and therefore is able to lookup a host named "redis.internal" using some kind of internal DNS scheme (e.g. Route53).
+The "internal" endpoint group contains a TCP URL for a Redis server. It is assumed for this example that Cupcake is
+situated on a server that is inside the private network and therefore is able to lookup a host named "redis.internal"
+using some kind of internal DNS scheme (e.g. Route53).
 
-The website endpoint also defines a threshold for the response timing where anything greater than 200 milliseconds will cause an incident to be raised.
+The website endpoint also defines a threshold for the response timing where anything greater than 200 milliseconds will
+cause an incident to be raised.
 
 ```
 {
@@ -131,6 +153,7 @@ The website endpoint also defines a threshold for the response timing where anyt
                     "min": 0,
                     "max": 200
                   },
+                  "retry": 3,
                   "appendTraceID": true,
                   "traceArgumentKey": "cupcake_trace_id",
                   "appendAttempt": true,
@@ -161,11 +184,15 @@ The website endpoint also defines a threshold for the response timing where anyt
 
 ## Alert definition file
 
-Alerts are defined in a separate file. Each alert has a type, an ID and whatever properties it needs to operate. Alerts are grouped together by defining an `alert-group` which references the `id` of the alerts in an array. See the next section for an example.
+Alerts are defined in a separate file. Each alert has a type, an ID and whatever properties it needs to operate. Alerts
+are grouped together by defining an `alert-group` which references the `id` of the alerts in an array. See the next
+section for an example.
 
 There are two standard groups: `default` and `summary`.
 
-The `default` group contains the IDs of alerts that should receive incident notifications in the absence of an overriding instruction in the endpoints hierarchy. The `summary` group contains the IDs of alerts that should receive the summary digest that is emitted at startup and periodically thereafter.
+The `default` group contains the IDs of alerts that should receive incident notifications in the absence of an
+overriding instruction in the endpoints hierarchy. The `summary` group contains the IDs of alerts that should receive
+the summary digest that is emitted at startup and periodically thereafter.
 
 ### Example
 
@@ -214,8 +241,8 @@ The `default` group contains the IDs of alerts that should receive incident noti
 
 ## Metrics definitions file
 
-Metrics output is also defined in a separate file. Like alerts, different metrics output streams are organised into groups, with `default` being the default collection of metrics streams that response times will be sent to.
-
+Metrics output is also defined in a separate file. Like alerts, different metrics output streams are organised into
+groups, with `default` being the default collection of metrics streams that response times will be sent to.
 
 ### Example
 
