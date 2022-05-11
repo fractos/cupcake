@@ -115,7 +115,7 @@ code that it expects to receive (any status code in range 2xx). An optional GUID
 with the key `cupcake_trace_id` (which is the default). An optional attempt number will be added to the URL query string
 with the key `cupcake_attempt` (which is the default). The URL including the TraceID will be emitted in any alert
 incident that occurs allowing this to be located in server access logs. `retry` signifies to retry this endpoint 2 times
-if failure encountered. By default all endpoints that fail due to a timeout are retried 3 times - the `retry` value 
+if failure encountered. By default all endpoints that fail due to a timeout are retried 3 times - the `retry` value
 overrides that.
 
 The "internal" endpoint group contains a TCP URL for a Redis server. It is assumed for this example that Cupcake is
