@@ -76,23 +76,22 @@ class Endpoint:
     Represent an endpoint's metadata
     """
 
-    def __init__(self, environment_group, environment, endpoint_group, endpoint, url, retry):
+    def __init__(self, environment_group, environment, endpoint_group, endpoint, url, retry, timeout):
         self.environment_group = environment_group
         self.environment = environment
         self.endpoint_group = endpoint_group
         self.endpoint = endpoint
         self.url = url
         self.retry = retry
-
+        self.timeout = timeout
 
     def __repr__(self):
-        return "{} {} {} {} {} {}".format(
+        return "{} {} {} {} {}".format(
             self.environment_group,
             self.environment,
             self.endpoint_group,
             self.endpoint,
-            self.url,
-            self.retry
+            self.url
         )
 
 

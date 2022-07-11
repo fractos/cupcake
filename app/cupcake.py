@@ -239,6 +239,7 @@ def endpoints_check():
                                 endpoint_threshold = Threshold(endpoint["threshold"])
 
                             retry = endpoint.get("retry", 0)
+                            timeout = endpoint.get("timeout", 0)
 
                             endpoint_model = Endpoint(
                                 environment_group=environment_group_id,
@@ -246,7 +247,8 @@ def endpoints_check():
                                 endpoint_group=endpoint_group_id,
                                 endpoint=endpoint_id,
                                 url=endpoint_url,
-                                retry=retry
+                                retry=retry,
+                                timeout=timeout
                             )
 
                             metrics_groups = get_endpoint_default(
@@ -383,14 +385,18 @@ def http_check(parse_result, endpoint, expected, threshold, metrics_groups):
     try:
         conn = None
 
+        timeout = settings.CONNECTION_TIMEOUT
+        if endpoint.timeout:
+            timeout = endpoint.timeout
+
         if parse_result.scheme == "http":
             conn = http.client.HTTPConnection(
                 host=parse_result.netloc,
-                timeout=settings.CONNECTION_TIMEOUT)
+                timeout=timeout)
         else:
             conn = http.client.HTTPSConnection(
                 host=parse_result.netloc,
-                timeout=settings.CONNECTION_TIMEOUT)
+                timeout=timeout)
 
         request_path = "{}{}".format(parse_result.path,
                                      "?{}".format(parse_result.query) if len(parse_result.query) > 0 else "")

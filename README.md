@@ -116,13 +116,13 @@ with the key `cupcake_trace_id` (which is the default). An optional attempt numb
 with the key `cupcake_attempt` (which is the default). The URL including the TraceID will be emitted in any alert
 incident that occurs allowing this to be located in server access logs. `retry` signifies to retry this endpoint 2 times
 if failure encountered. By default all endpoints that fail due to a timeout are retried 3 times - the `retry` value
-overrides that.
+overrides that. It also sets a customer `timeout` of 30s, which will override the default set by `CONNECTION_TIMEOUT_SECONDS`
 
 The "internal" endpoint group contains a TCP URL for a Redis server. It is assumed for this example that Cupcake is
 situated on a server that is inside the private network and therefore is able to lookup a host named "redis.internal"
 using some kind of internal DNS scheme (e.g. Route53).
 
-The website endpoint also defines a threshold for the response timing where anything greater than 200 milliseconds will
+The website endpoint also defines a `threshold` for the response timing where anything greater than 200 milliseconds will
 cause an incident to be raised.
 
 ```
@@ -154,6 +154,7 @@ cause an incident to be raised.
                     "max": 200
                   },
                   "retry": 3,
+                  "timeout": 30,
                   "appendTraceID": true,
                   "traceArgumentKey": "cupcake_trace_id",
                   "appendAttempt": true,
