@@ -10,14 +10,12 @@ import socket
 import http.client
 import json
 import time
-import requests
 import signal
-import os
 import boto3
 import uuid
 from models import Incident, Threshold, Metric, Endpoint
 from alerts import deliver_alert_to_groups, deliver_alert_to_group, get_alerts_in_group
-from metrics import deliver_metric_to_groups, get_metrics_in_group
+from metrics import deliver_metric_to_groups
 import settings
 
 requested_to_quit = False
@@ -27,6 +25,7 @@ endpoint_definitions = None
 alert_definitions = None
 metrics_definitions = None
 db = None
+
 
 def main():
     logger.info("starting...")
@@ -93,7 +92,7 @@ def lifecycle():
     )
 
     if settings.SUMMARY_ENABLED:
-        seconds=time.time()-last_summary_emitted
+        seconds = time.time() - last_summary_emitted
         if seconds >= settings.SUMMARY_SLEEP_SECONDS:
             last_summary_emitted = time.time()
             emit_summary()
@@ -113,11 +112,18 @@ def emit_summary():
 
     number_of_endpoints = 0
 
+    # build a list of monitored results, for ease of validating actives
+    monitored = []
+
     for group in endpoint_definitions["groups"]:
         for environment in group["environments"]:
             for endpoint_group in environment["endpoint-groups"]:
-                if endpoint_group["enabled"] == "true":
-                    for _ in endpoint_group["endpoints"]:
+                for endpoint in endpoint_group["endpoints"]:
+                    endpoint_group_enabled = endpoint_group["enabled"]
+                    monitor_id = get_monitor_identifier(group["id"], environment["id"], endpoint_group["id"],
+                                                        endpoint["id"], endpoint_group_enabled)
+                    monitored.append(monitor_id)
+                    if endpoint_group_enabled == "true":
                         number_of_endpoints = number_of_endpoints + 1
 
     endpoint_plural = "s"
@@ -125,18 +131,9 @@ def emit_summary():
     if number_of_endpoints == 1:
         endpoint_plural = ""
 
-    message = "Cupcake is alive and currently monitoring {} endpoint{}.".format(number_of_endpoints, endpoint_plural)
+    message = f"Cupcake is alive and currently monitoring {number_of_endpoints} endpoint{endpoint_plural}."
 
-    actives = db.get_all_actives()
-    actives_message = ""
-
-    for active in actives:
-        actives_message = actives_message + "{} since {}\n".format(active["message"], datetime.utcfromtimestamp(active["timestamp"]).strftime('%Y-%m-%d %H:%M:%S'))
-
-    if len(actives) == 0:
-        message = message + "\n\nCupcake is not currently aware of any alerts."
-    else:
-        message = message + "\n\nCupcake is aware of the following alerts:\n%s" % actives_message
+    message = process_active_alerts(db, monitored, message)
 
     deliver_alert_to_group(
         incident=Incident(
@@ -146,6 +143,49 @@ def emit_summary():
         alert_group_id="summary",
         alert_definitions=alert_definitions
     )
+
+
+def process_active_alerts(db, monitored, message):
+    actives = db.get_all_actives()
+    actives_message = ""
+    for active in actives:
+        display_time = datetime.utcfromtimestamp(active["timestamp"]).strftime('%Y-%m-%d %H:%M:%S')
+
+        environment_group_id = active["environment_group"]
+        environment_id = active["environment"]
+        endpoint_group_id = active["endpoint_group"]
+        endpoint_id = active["endpoint"]
+        monitor_id = get_monitor_identifier(environment_group_id, environment_id, endpoint_group_id, endpoint_id,
+                                            "true")
+
+        if not settings.REMOVE_UNKNOWN_ACTIVES or monitor_id in monitored:
+            actives_message = f"{actives_message}{active['message']} since {display_time}\n"
+        else:
+            logger.info(f"removing active alert as not in alert definition: {monitor_id}")
+            actives_message = f"{actives_message}removing alert: {active['message']} since {display_time}\n"
+            endpoint_model = Endpoint(
+                environment_group=environment_group_id,
+                environment=environment_id,
+                endpoint_group=endpoint_group_id,
+                endpoint=endpoint_id,
+                url=active["url"]
+            )
+
+            incident = Incident(
+                timestamp=datetime.now(timezone.utc).astimezone().isoformat(),
+                endpoint=endpoint_model
+            )
+            db.remove_active(incident)
+
+    if len(actives) == 0:
+        message = message + "\n\nCupcake is not currently aware of any alerts."
+    else:
+        message = message + f"\n\nCupcake is aware of the following alerts:\n{actives_message}"
+    return message
+
+
+def get_monitor_identifier(environment_group, environment, endpoint_group, endpoint, active):
+    return "%s|%s|%s|%s|%s" % (environment_group, environment, endpoint_group, endpoint, active)
 
 
 def endpoints_check():
@@ -176,13 +216,7 @@ def endpoints_check():
                             endpoint_url = endpoint["url"]
 
                             if "appendTraceID" in endpoint and endpoint["appendTraceID"]:
-
-                                # default argument key
-                                trace_argument_key = "cupcake_trace_id"
-
-                                # use custom key if provided
-                                if "traceArgumentKey" in endpoint:
-                                    trace_argument_key = endpoint["traceArgumentKey"]
+                                trace_argument_key = endpoint.get("traceArgumentKey", "cupcake_trace_id")
 
                                 endpoint_url = create_or_append_query_string(
                                     original=endpoint_url,
@@ -190,33 +224,31 @@ def endpoints_check():
                                 )
 
                             if "appendAttempt" in endpoint and endpoint["appendAttempt"]:
-
-                                # default argument key
-                                append_attempt_key = "cupcake_attempt"
-
-                                # use custom key if provided
-                                if "attemptArgumentKey" in endpoint:
-                                    append_attempt_key = endpoint["attemptArgumentKey"]
+                                # have default argument key, use custom key if provided
+                                append_attempt_key = endpoint.get("attemptArgumentKey", "cupcake_attempt")
 
                                 endpoint_url = create_or_append_query_string(
                                     original=endpoint_url,
                                     argument="{}=##CUPCAKE_ATTEMPT##".format(append_attempt_key)
                                 )
 
-                            endpoint_expected = ""
-                            if "expected" in endpoint:
-                                endpoint_expected = endpoint["expected"]
+                            endpoint_expected = endpoint.get("expected", "")
 
                             endpoint_threshold = None
                             if "threshold" in endpoint:
                                 endpoint_threshold = Threshold(endpoint["threshold"])
 
+                            retry = endpoint.get("retry", 0)
+                            timeout = endpoint.get("timeout", 0)
+
                             endpoint_model = Endpoint(
-                                environment_group = environment_group_id,
-                                environment = environment_id,
-                                endpoint_group = endpoint_group_id,
-                                endpoint = endpoint_id,
-                                url = endpoint_url
+                                environment_group=environment_group_id,
+                                environment=environment_id,
+                                endpoint_group=endpoint_group_id,
+                                endpoint=endpoint_id,
+                                url=endpoint_url,
+                                retry=retry,
+                                timeout=timeout
                             )
 
                             metrics_groups = get_endpoint_default(
@@ -231,7 +263,8 @@ def endpoints_check():
                                 default_value=get_alerts_in_group("default", alert_definitions)
                             )
 
-                            executor.submit(run_test, endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold)
+                            executor.submit(run_test, endpoint_model, metrics_groups, alert_groups, endpoint_expected,
+                                            endpoint_threshold)
 
 
 def get_trace_id():
@@ -240,9 +273,9 @@ def get_trace_id():
 
 def create_or_append_query_string(original, argument):
     if "?" in original:
-        return "{}&{}".format(original, argument)
+        return f"{original}&{argument}"
     # else...
-    return "{}?{}".format(original, argument)
+    return f"{original}?{argument}"
 
 
 def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, endpoint_threshold):
@@ -261,10 +294,13 @@ def run_test(endpoint_model, metrics_groups, alert_groups, endpoint_expected, en
             threshold=endpoint_threshold,
             metrics_groups=metrics_groups
         )
-        if not result["result"] and result["message"] == "TIMEOUT":
+
+        # Retry TIMEOUTs 3 times but only if not already retried via endpoint config
+        if not result["result"] and result["message"] == "TIMEOUT" and not result.get("retried", False):
             attempt = attempt + 1
             if attempt <= 3:
-                logger.info("re-testing timed out endpoint ({}) (attempt {} failed)".format(endpoint_model.url, attempt))
+                logger.info(
+                    f"re-testing timed out endpoint ({endpoint_model}) (attempt {attempt} failed)")
                 keep_trying = True
                 continue
         break
@@ -318,86 +354,110 @@ def get_child_by_property(parent, property, target):
 def test_endpoint(endpoint, expected, threshold, metrics_groups):
     global metrics_definitions
 
-    logger.info("testing endpoint {}".format(endpoint.url))
+    logger.info(f"testing endpoint {endpoint.url}")
     if not lifecycle_continues():
         logger.info("test_endpoint: bailing")
         return False
 
     parse_result = urlparse(endpoint.url)
 
+    count = 0
+    result = {}
+
+    while count <= endpoint.retry:
+        count += 1
+        if parse_result.scheme == "http" or parse_result.scheme == "https":
+            result = http_check(parse_result, endpoint, expected, threshold, metrics_groups)
+        elif parse_result.scheme == "tcp":
+            result = tcp_check(parse_result, endpoint, threshold, metrics_groups)
+
+        if result.get("result", False):
+            break
+
+    if count > 1:
+        result["retried"] = True
+
+    return result
+
+
+def http_check(parse_result, endpoint, expected, threshold, metrics_groups):
     start_time = time.time()
-    test_time = None
+    try:
+        conn = None
 
-    if parse_result.scheme == "http" or parse_result.scheme == "https":
-        try:
-            conn = None
+        timeout = settings.CONNECTION_TIMEOUT
+        if endpoint.timeout:
+            timeout = endpoint.timeout
 
-            if parse_result.scheme == "http":
-                conn = http.client.HTTPConnection(
-                    host=parse_result.netloc,
-                    timeout=settings.CONNECTION_TIMEOUT)
-            else:
-                conn = http.client.HTTPSConnection(
-                    host=parse_result.netloc,
-                    timeout=settings.CONNECTION_TIMEOUT)
+        if parse_result.scheme == "http":
+            conn = http.client.HTTPConnection(
+                host=parse_result.netloc,
+                timeout=timeout)
+        else:
+            conn = http.client.HTTPSConnection(
+                host=parse_result.netloc,
+                timeout=timeout)
 
-            request_path = "{}{}".format(parse_result.path, "?{}".format(parse_result.query) if len(parse_result.query) > 0 else "")
-            logger.debug("request path: {}".format(request_path))
-            conn.request("GET", request_path)
-            http_response = conn.getresponse()
-            status = str(http_response.status)
-            logger.debug("status: {}, expected: {}".format(status, expected))
-            if re.match(expected, status):
-                # result was good but now check if timing was beyond threshold
-                test_time = get_relative_time(start_time, time.time())
-                logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
+        request_path = "{}{}".format(parse_result.path,
+                                     "?{}".format(parse_result.query) if len(parse_result.query) > 0 else "")
+        logger.debug(f"request path: {request_path}")
+        conn.request("GET", request_path)
+        http_response = conn.getresponse()
+        status = str(http_response.status)
+        logger.debug(f"status: {status}, expected: {expected}")
+        if re.match(expected, status):
+            # result was good but now check if timing was beyond threshold
+            return threshold_check(start_time, endpoint, metrics_groups, threshold)
 
-                metrics_record_response_time(
-                    endpoint=endpoint,
-                    timestamp=time.time(),
-                    response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
-                    metrics_groups=metrics_groups
-                )
+        test_time = get_relative_time(start_time, time.time())
+        response_time = int(round(getattr(test_time, "microsecond") / 1000.0))
+        logger.debug(f"response time was {response_time}ms")
 
-                threshold_result = None
-                if threshold is not None:
-                    threshold_result = threshold.result(test_time)
+        metrics_record_response_time(
+            endpoint=endpoint,
+            timestamp=time.time(),
+            response_time=response_time,
+            metrics_groups=metrics_groups
+        )
 
-                if threshold_result is None or threshold_result.okay:
-                    return {
-                        "result": True,
-                        "message": "OK"
-                    }
+        if settings.SHOW_BODY_IN_DEBUG_ON_UNEXPECTED_STATUS:
+            body = http_response.read()
+            logger.debug(f"body for {endpoint.url} was {body}")
 
-                return {
-                    "result": False,
-                    "message": "BAD",
-                    "threshold": threshold_result.result
-                }
+        return {
+            "result": False,
+            "actual": status,
+            "message": "BAD"
+        }
 
-            test_time = get_relative_time(start_time, time.time())
-            logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
+    except Exception as e:
+        logger.debug(f"error during testing: {str(e)}")
+        pass
 
-            metrics_record_response_time(
-                endpoint=endpoint,
-                timestamp=time.time(),
-                response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
-                metrics_groups=metrics_groups
-            )
+    test_time = get_relative_time(start_time, time.time())
 
-            if settings.SHOW_BODY_IN_DEBUG_ON_UNEXPECTED_STATUS:
-                body = http_response.read()
-                logger.debug("body for {} was {}", endpoint.url, body)
+    metrics_record_response_time(
+        endpoint=endpoint,
+        timestamp=time.time(),
+        response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
+        metrics_groups=metrics_groups
+    )
 
-            return {
-                "result": False,
-                "actual": status,
-                "message": "BAD"
-            }
+    return {
+        "result": False,
+        "message": "TIMEOUT"
+    }
 
-        except Exception as e:
-            logger.debug("error during testing: {}".format(str(e)))
-            pass
+
+def tcp_check(parse_result, endpoint, threshold, metrics_groups):
+    start_time = time.time()
+
+    s = socket.socket()
+    try:
+        s.settimeout(settings.CONNECTION_TIMEOUT)
+        s.connect((parse_result.hostname, parse_result.port))
+    except socket.timeout:
+        logger.info(f"tcp endpoint {parse_result.netloc} hit timeout")
 
         test_time = get_relative_time(start_time, time.time())
 
@@ -413,55 +473,9 @@ def test_endpoint(endpoint, expected, threshold, metrics_groups):
             "message": "TIMEOUT"
         }
 
-    elif parse_result.scheme == "tcp":
-        s = socket.socket()
-        try:
-            s.settimeout(settings.CONNECTION_TIMEOUT)
-            s.connect((parse_result.hostname, parse_result.port))
-        except socket.timeout:
-            logger.info(
-                "tcp endpoint {} hit timeout".format(parse_result.netloc)
-            )
+    except Exception as e:
 
-            test_time = get_relative_time(start_time, time.time())
-
-            metrics_record_response_time(
-                endpoint=endpoint,
-                timestamp=time.time(),
-                response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
-                metrics_groups=metrics_groups
-            )
-
-            return {
-                "result": False,
-                "message": "TIMEOUT"
-            }
-
-        except Exception as e:
-
-            test_time = get_relative_time(start_time, time.time())
-
-            metrics_record_response_time(
-                endpoint=endpoint,
-                timestamp=time.time(),
-                response_time=int(round(getattr(test_time, "microsecond") / 1000.0)),
-                metrics_groups=metrics_groups
-            )
-
-            logger.info(
-                "tcp endpoint {} had a problem: {}".format(parse_result.netloc, e)
-            )
-            return {
-                "result": False,
-                "message": "BAD"
-            }
-
-        finally:
-            s.close()
-        # result was good but now check if timing was beyond threshold
         test_time = get_relative_time(start_time, time.time())
-
-        logger.debug("response time was {}ms".format(int(round(getattr(test_time, "microsecond") / 1000.0))))
 
         metrics_record_response_time(
             endpoint=endpoint,
@@ -470,20 +484,46 @@ def test_endpoint(endpoint, expected, threshold, metrics_groups):
             metrics_groups=metrics_groups
         )
 
-        threshold_result = None
-        if threshold is not None:
-            threshold_result = threshold.result(test_time)
-
-        if threshold_result is None or threshold_result.okay:
-            return {
-                "result": True
-            }
-
+        logger.info(f"tcp endpoint {parse_result.netloc} had a problem: {e}")
         return {
             "result": False,
-            "message": "BAD",
-            "threshold": threshold_result.result
+            "message": "BAD"
         }
+
+    finally:
+        s.close()
+
+    # result was good but now check if timing was beyond threshold
+    return threshold_check(start_time, endpoint, metrics_groups, threshold)
+
+
+def threshold_check(start_time, endpoint, metrics_groups, threshold):
+    test_time = get_relative_time(start_time, time.time())
+    response_time = int(round(getattr(test_time, "microsecond") / 1000.0))
+    logger.debug(f"response time was {response_time}ms")
+
+    metrics_record_response_time(
+        endpoint=endpoint,
+        timestamp=time.time(),
+        response_time=response_time,
+        metrics_groups=metrics_groups
+    )
+
+    threshold_result = None
+    if threshold is not None:
+        threshold_result = threshold.result(test_time)
+
+    if threshold_result is None or threshold_result.okay:
+        return {
+            "result": True,
+            "message": "OK"
+        }
+
+    return {
+        "result": False,
+        "message": "BAD",
+        "threshold": threshold_result.result
+    }
 
 
 def metrics_record_response_time(endpoint, timestamp, response_time, metrics_groups):
@@ -503,7 +543,7 @@ def metrics_record_response_time(endpoint, timestamp, response_time, metrics_gro
 
 
 def get_relative_time(start_time, end_time):
-    return relativedelta(microsecond=int(round((end_time-start_time) * 1000000)))
+    return relativedelta(microsecond=int(round((end_time - start_time) * 1000000)))
 
 
 def handle_result(incident, alert_groups):
@@ -516,37 +556,35 @@ def handle_result(incident, alert_groups):
 
     attrs = ["years", "months", "days", "hours", "minutes", "seconds", "microsecond"]
     human_readable = lambda delta: ["%d %s" % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
-        for attr in attrs if getattr(delta, attr)]
+                                    for attr in attrs if getattr(delta, attr)]
 
-    logger.debug("result: timestamp: {}, environment_group: {} environment: {}, endpoint_group: {}, endpoint: {}, result: {}, url: {}, expected: {}".format(
-        incident.timestamp,
-        incident.endpoint.environment_group,
-        incident.endpoint.environment,
-        incident.endpoint.endpoint_group,
-        incident.endpoint.endpoint,
-        incident.result["result"],
-        incident.endpoint.url,
-        incident.expected
-    ))
+    logger.debug(
+        "result: timestamp: {}, environment_group: {} environment: {}, endpoint_group: {}, endpoint: {}, result: {}, url: {}, expected: {}".format(
+            incident.timestamp,
+            incident.endpoint.environment_group,
+            incident.endpoint.environment,
+            incident.endpoint.endpoint_group,
+            incident.endpoint.endpoint,
+            incident.result["result"],
+            incident.endpoint.url,
+            incident.expected
+        ))
 
     if "actual" in incident.result:
-        logger.info("actual for {}: {}".format(incident.endpoint.url, incident.result["actual"]))
+        logger.info(f"actual for {incident.endpoint.url}: {incident.result['actual']}")
 
     if "threshold" in incident.result:
-        logger.info("threshold for {}: {}".format(incident.endpoint.url, incident.result["threshold"]))
+        logger.info(f"threshold for {incident.endpoint.url}: {incident.result['threshold']}")
 
     if db.active_exists(incident):
         # there's an existing alert for this tuple
         active = db.get_active(incident)
         if incident.result["result"]:
             # existing alert cleared
-            logger.info("cleared alert for {}".format(incident.endpoint.url))
+            logger.info(f"cleared alert for {incident.endpoint.url}")
 
-            delta = relativedelta(seconds=time.time()-active["timestamp"])
-            incident.message = "{} now OK after {}\n".format(
-                repr(incident.endpoint),
-                ", ".join(human_readable(delta))
-            )
+            delta = relativedelta(seconds=time.time() - active["timestamp"])
+            incident.message = f"{repr(incident.endpoint)} now OK after {', '.join(human_readable(delta))}\n"
 
             db.remove_active(incident)
 
@@ -569,36 +607,16 @@ def handle_result(incident, alert_groups):
 
             if "threshold" in incident.result:
                 incident.presentation_message = "result was {}".format(incident.result["threshold"])
-                incident.message = "{} response {}".format(
-                    repr(incident.endpoint),
-                    incident.result["threshold"]
-                )
+                incident.message = f"{repr(incident.endpoint)} response {incident.result['threshold']}"
             else:
-                incident.presentation_message = "result was {}".format(incident.result["message"])
-                incident.message = "{} expected {}".format(
-                    repr(incident.endpoint),
-                    incident.expected
-                )
+                incident.presentation_message = f"result was {incident.result['message']}"
+                incident.message = f"{repr(incident.endpoint)} expected {incident.expected}"
 
                 if "actual" in incident.result:
-                    incident.presentation_message = "{}, actual: {}".format(
-                        incident.presentation_message,
-                        incident.result["actual"]
-                    )
-                    incident.message = "{}, actual: {}".format(
-                        incident.message,
-                        incident.result["actual"]
-                    )
+                    incident.presentation_message = f"{incident.presentation_message}, actual: {incident.result['actual']}"
+                    incident.message = f"{incident.message}, actual: {incident.result['actual']}"
                 else:
-                    incident.message = "{}, actual: {}".format(
-                        incident.message,
-                        incident.result["message"]
-                    )
-
-                # incident.message = "{}\n({})".format(
-                #     incident.message,
-                #     incident.endpoint.url
-                # )
+                    incident.message = f"{incident.message}, actual: {incident.result['message']}"
 
             db.save_active(incident)
 
